@@ -24,6 +24,7 @@ visible; a successful-looking response is not a substitute for a verified result
 ## Start here
 
 - **Start a local quality run:** [Initialize, inspect, and resume](docs/how-to/run-local.md) with one CLI.
+- **Assess a GitHub PR:** [Run Actions and Agentic Workflows](docs/how-to/run-github.md) with deterministic verification, Copilot review, retained evidence, and a quality gate.
 - **See real test evidence:** [Execute the quality regression](evals/README.md#execute-the-quality-handoff-with-real-tests).
 - **Try one skill:** [Create an outcome brief with your agent](docs/tutorials/first-skill.md).
 - **Try a factory workflow:** [Rehearse an offline factory run](docs/tutorials/factory-rehearsal.md).
@@ -77,6 +78,7 @@ compatibility. A trusted adapter supplies the actual work; the
 | Workflows | JSON recipes in `workflows/` | Named dependency graphs with explicit artifact bindings. |
 | Schemas and examples | `schemas/`, `examples/` | Validate interchange records and demonstrate integration boundaries. |
 | Adapter contracts | `adapters/` | Separate neutral skill behavior from environment-specific tool calls. |
+| GitHub integration | [Actions and Agentic Workflows](docs/how-to/run-github.md) | Assess a pinned PR through real verification, the review skill, and deterministic quality/effect gates. |
 | Reference tools | `tools/` and `tests/` | Validate the library, inspect readiness, assess gates, and export skills. |
 | Behavioral evaluation | [Seed case and rubric](evals/README.md) | Exercise skills on an isolated coding task and report evidence and limits. |
 
@@ -85,8 +87,10 @@ can dispatch **trusted Python adapters** for effect-free skills, validate their
 results, and save a checkpoint after each step. A
 [reference unittest adapter](examples/adapters/README.md) executes real checks
 on pinned candidates. These tools supply no sandbox or production tool boundary.
-The library does not supply a live coding agent, tracker, merge queue, or
-deployment service. A production controller must provide persistence,
+The optional GitHub integration connects Copilot through Agentic Workflows for
+automated review. It uses a manually dispatched Actions gate and grants no merge
+authority; independent human approval remains separate. The library does not
+supply a tracker, merge queue, or deployment service. A production controller must provide persistence,
 authentication, isolation, scheduling, and enforcement at the actual tool
 boundary. See [factory architecture](docs/explanation/factory-design.md).
 
