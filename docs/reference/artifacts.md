@@ -33,6 +33,16 @@ one universal business model. Skill instructions define payload meaning. Structu
 validation alone cannot establish that an arbitrary payload is complete or
 truthful; controllers and evaluators must check the relevant semantic contract.
 
+The offline reference checker also validates **core payload schemas** for
+`verification-report` and `review-report` from
+[`payload-verification-report.schema.json`](../../schemas/payload-verification-report.schema.json)
+and [`payload-review-report.schema.json`](../../schemas/payload-review-report.schema.json).
+They constrain claim-bearing counts, dispositions, and field types while allowing
+additional skill-specific fields. A schema-valid report is still not proof that a
+check ran or a reviewer is independent: the host must authenticate producers,
+inspect evidence, and enforce policy at the action boundary. Missing or malformed
+core payload fields block a reference gate.
+
 ## Evidence record
 
 Each evidence record has:

@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "before": {
+    "subject": {
+      "revision": "candidate-b",
+      "input_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+      "environment": "ci-linux"
+    },
+    "inputs": {
+      "spec": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source:inventory": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "tests:inventory": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "after": {
+    "subject": {
+      "revision": "integrated-c",
+      "input_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+      "environment": "ci-linux"
+    },
+    "inputs": {
+      "spec": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source:inventory": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "tests:inventory": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "complete_inventory": true,
+  "claims": [
+    {
+      "id": "specification",
+      "depends_on": [
+        "spec"
+      ],
+      "needs": []
+    },
+    {
+      "id": "implementation",
+      "depends_on": [
+        "source:inventory"
+      ],
+      "needs": [
+        "specification"
+      ]
+    },
+    {
+      "id": "verification",
+      "depends_on": [
+        "source:inventory",
+        "tests:inventory"
+      ],
+      "needs": [
+        "implementation"
+      ]
+    },
+    {
+      "id": "review",
+      "depends_on": [
+        "spec",
+        "source:inventory"
+      ],
+      "needs": [
+        "verification"
+      ]
+    }
+  ]
+}
