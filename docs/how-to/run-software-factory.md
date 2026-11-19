@@ -178,6 +178,18 @@ step and repository PR-creation permission. If a draft exists but quality
 dispatch failed, run **sfstack GitHub quality** manually for that PR from the
 current default branch, using the [quality retry instructions](run-github.md#run-or-retry-manually).
 
+## Troubleshoot the first live run
+
+| Symptom | Likely cause | Safe recovery action |
+| --- | --- | --- |
+| The build job fails at authentication, or reports that the Copilot token is missing or invalid. | The `COPILOT_GITHUB_TOKEN` repository secret is absent, expired, revoked, or lacks Copilot access. Organization policy may also hide it from this repository. | Confirm the secret exists under **Settings → Secrets and variables → Actions** without displaying it. Replace it through the secret form with a valid token, as in the [quality integration](run-github.md#install-and-enable), then use **Re-run all jobs**. Never paste a token into an issue, input, log, or PR. |
+| The run is rejected at admission, with an invalid `allowed-paths` or `acceptance-criteria` message. | An input is not a JSON array of strings, lists a glob, directory, hidden path, or location outside `docs/`, `examples/`, `tests/`, or root `README.md`, names more than eight files or no criteria, or has a criterion over 2,000 characters. | Dispatch a new run with exact files, for example `["docs/how-to/run-github.md"]`, and one to eight criteria. See [Select a small issue and run it](#select-a-small-issue-and-run-it). Do not widen scope to work around a rejection; split the work instead. |
+| The run reports a stale or changed base or issue, or publication refuses to continue. | `main` advanced, or the issue title or body was edited, after the run pinned its inputs. | Do not retry the old run. Dispatch a new run from the current default branch with updated inputs. Re-run all jobs only when the issue, base, and scope are unchanged. See [Retry or recover](#retry-or-recover). |
+| Verification passes but the publish step fails to create the draft PR. | **Allow GitHub Actions to create and approve pull requests** is disabled for the repository, or an organization policy disables it. The setting is under **Settings → Actions → General → Workflow permissions**. | Have an administrator enable it as described in [Enable the integration](#enable-the-integration), then re-run all jobs if the issue and base are unchanged. This does not grant approval or merge authority, and you must still review the draft. Check existing drafts first to avoid duplicates. |
+
+None of these recoveries bypass the quality gates, broaden write authority,
+approve changes, or merge automatically.
+
 ## Complete the first live acceptance test
 
 After merge, use one small sfstack issue as the first live implementation run.
