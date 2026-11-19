@@ -114,10 +114,6 @@ Perform the bounded `sf-build-change` invocation in
 5. Inspect the diff and make at most two repair cycles after the first attempt.
    Preserve failed checks and limitations. Report `blocked` or `inconclusive`
    when required evidence is missing; do not invent execution results.
-   For a `passed` response, `remaining_work` must be empty: use this field only for
-   unfinished implementation or unmet acceptance criteria. Normal human PR
-   review is always required separately and is not unfinished agent work;
-   describe review caveats in `summary` instead. Do not suppress real blockers.
 6. Submit full UTF-8 contents for every proposed changed file using the template.
    The host validates permitted paths, applies the proposal to a fresh checkout,
    and runs verification independently. Your local edits and test claims are

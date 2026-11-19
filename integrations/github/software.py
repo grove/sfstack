@@ -242,7 +242,15 @@ def render(bundle, candidate, output, at=None):
         "response_schema": str((output / "change.schema.json").resolve()),
         "transport": "Submit complete UTF-8 contents of only changed allowed files. The host supplies immutable identities and evidence envelopes.",
         "limits": "At most 8 files, 32 KiB per file, 64 KiB total; no deletes, renames, mode changes, or external effects. Two repair cycles."}
-    (output / "invocation.md").write_text(render_skill("sf-build-change", context), encoding="utf-8")
+    # Human PR review is a separate non-authorizing quality boundary, not
+    # unfinished builder implementation. True unmet criteria still block.
+    guidance = ("\\n\\nSubmission status: a `passed` change must have an empty "
+                "`remaining_work` list. Reserve `remaining_work` for genuine "
+                "unmet criteria or implementation blockers; ordinary human PR "
+                "review occurs after the draft and belongs in the summary. "
+                "Never hide genuine blockers to claim a pass.\\n")
+    (output / "invocation.md").write_text(render_skill("sf-build-change", context) + guidance,
+                                           encoding="utf-8")
     return {"status": "rendered", "skill": "sf-build-change"}
 
 
