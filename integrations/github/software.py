@@ -242,7 +242,15 @@ def render(bundle, candidate, output, at=None):
         "response_schema": str((output / "change.schema.json").resolve()),
         "transport": "Submit complete UTF-8 contents of only changed allowed files. The host supplies immutable identities and evidence envelopes.",
         "limits": "At most 8 files, 32 KiB per file, 64 KiB total; no deletes, renames, mode changes, or external effects. Two repair cycles."}
-    (output / "invocation.md").write_text(render_skill("sf-build-change", context), encoding="utf-8")
+    # Human PR review is a separate non-authorizing quality boundary, not
+    # unfinished builder implementation. True unmet criteria still block.
+    guidance = ("\n\nSubmission status: a `passed` change must have an empty "
+                "`remaining_work` list. Reserve `remaining_work` for genuine "
+                "unmet criteria or implementation blockers; ordinary human PR "
+                "review occurs after the draft and belongs in the summary. "
+                "Never hide genuine blockers to claim a pass.\n")
+    (output / "invocation.md").write_text(render_skill("sf-build-change", context) + guidance,
+                                           encoding="utf-8")
     return {"status": "rendered", "skill": "sf-build-change"}
 
 
@@ -252,9 +260,17 @@ def load_response(path, run, target):
         raise ValueError("Agent submission exceeds the bounded transport size.")
     outer = automation.strict_json(raw)
     items = outer.get("items") if isinstance(outer, dict) else None
+    # gh-aw's live safe-output transport adds an output_id alongside the
+    # documented type and payload. It identifies the envelope, not a new grant.
     if (not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], dict)
-            or items[0].get("type") != "submit_change" or set(items[0]) != {"type", "change_json"}
-            or not isinstance(items[0]["change_json"], str)):
+            or items[0].get("type") != "submit_change"
+            or not {"type", "change_json"}.issubset(items[0])
+            or not set(items[0]).issubset({"type", "change_json", "output_id"})
+            or not isinstance(items[0]["change_json"], str)
+            or ("output_id" in items[0]
+                and (not isinstance(items[0]["output_id"], str)
+                     or not items[0]["output_id"].startswith("so_")
+                     or len(items[0]["output_id"]) > 128))):
         raise ValueError("Expected exactly one submit_change safe output.")
     response = automation.strict_json(items[0]["change_json"])
     errors = list(Draft202012Validator(load_json(HERE / "change.schema.json")).iter_errors(response))
