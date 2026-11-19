@@ -278,12 +278,16 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None,
             if any(item["evidence_id"] not in evidence for item in reports.values()):
                 problems.append(f"{prefix}: quality report lacks retained evidence.")
             if artifact["status"] == "passed":
-                if not {"verification-report", "review-report"}.issubset(covered):
+                core = {"verification-report", "review-report"}
+                if not core.issubset(covered):
                     problems.append(f"{prefix}: passing quality requires verification and review.")
                 if required - covered:
                     problems.append(f"{prefix}: required quality coverage is missing.")
-                if any(kind not in reports or reports[kind]["status"] != "passed" for kind in required):
-                    problems.append(f"{prefix}: a required quality report is not passing.")
+                if (covered - set(reports)
+                        or any(reports[kind]["status"] != "passed" for kind in covered & set(reports))):
+                    problems.append(f"{prefix}: a selected quality report is absent or non-passing.")
+                if required & set(payload["coverage"]["omitted"]):
+                    problems.append(f"{prefix}: required quality coverage is marked omitted.")
                 if any(item["blocking"] and item["disposition"] not in {"resolved", "rejected", "accepted-risk"}
                        for item in payload["findings"]):
                     problems.append(f"{prefix}: unresolved blocking quality finding.")

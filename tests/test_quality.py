@@ -100,11 +100,11 @@ class QualityWorkflowTests(unittest.TestCase):
                       " ".join(workflow_errors(wf, contracts())))
 
     def test_mutation_gate_still_rejects_failing_verification(self):
-        from factory import evaluate_gate
-        self.edit("gate-request.json", lambda r: r["artifacts"].append(
-            "records/quality-verification-failed.json"))
+        self.edit("gate-request.json", lambda r: r["artifacts"].__setitem__(
+            0, "records/quality-verification-failed.json"))
         result = evaluate_gate(self.dir / "gate-request.json", self.dir / "policy.json", AT)
         self.assertEqual("blocked", result["decision"])
+        self.assertIn("status is failed", " ".join(result["reasons"]))
 
 
 class QualitySummaryTests(unittest.TestCase):
@@ -156,6 +156,34 @@ class QualitySummaryTests(unittest.TestCase):
         self.assertEqual("pull-request", report["payload"]["target"]["kind"])
         self.assertEqual("base-123", report["payload"]["target"]["base_revision"])
         self.assertEqual("inconclusive", result["status"])
+
+    def test_external_change_reuses_the_same_quality_workflow(self):
+        scope = self.dir / "records" / "quality-change-set.json"
+        artifact = load_json(scope)
+        artifact["payload"]["target_kind"] = "external-change"
+        artifact["payload"]["source_reference"] = "synthetic/supplied-patch@demo-candidate-7b4a"
+        scope.write_text(json.dumps(artifact))
+        self.summarize()
+        result = load_json(self.dir / "quality-output" / "quality-assessment.json")
+        self.assertEqual("external-change", result["payload"]["target"]["kind"])
+
+    def test_passing_quality_cannot_list_a_failed_selected_report(self):
+        policy_path = self.dir / "policy.json"
+        policy = load_json(policy_path)
+        policy["require_independent_review"] = False
+        policy_path.write_text(json.dumps(policy))
+        self.summarize()
+        path = self.dir / "quality-output" / "quality-assessment.json"
+        artifact = load_json(path)
+        target = next(x for x in artifact["payload"]["reports"]
+                      if x["artifact_type"] == "verification-report")
+        target["status"] = "failed"
+        path.write_text(json.dumps(artifact))
+        _, problems = inspect_artifact(
+            path, artifact["subject"], artifact["run_id"], AT, 3600,
+            allow_nonpassing=True,
+        )
+        self.assertIn("selected quality report", " ".join(problems))
 
     def test_risk_checks_are_included_and_other_checks_not_assumed(self):
         self.summarize(run="quality-risk-ready-run.json", workflow="quality-risk")
