@@ -40,6 +40,15 @@ verification has a read-only repository token and no Copilot secret. Check
 publication and event routing use separate jobs with narrowly declared write
 permissions.
 
+The default-branch controller uses the Actions token to dispatch runs, so the
+reusable Agentic Workflow sees `github-actions[bot]` as its triggering actor.
+The review workflow explicitly allowlists **only this bot** through
+`on.bots: ["github-actions[bot]"]`, while retaining the normal
+`admin,maintainer,write` role checks for human actors. GitHub's installed-bot
+check still applies. This activation rule grants no additional GitHub API
+permissions or write capabilities to the agent. Do not replace it with
+`roles: all` to circumvent authorization checks.
+
 The default branch is currently `main`. If it is renamed, update the `push`
 branch filter in
 [sfstack-quality-events.yml](../../.github/workflows/sfstack-quality-events.yml)
@@ -70,7 +79,19 @@ cannot become an implicit pass. A valid negative verification report is retained
 and passed through review and consolidation, so failed tests remain evidence.
 
 When `main` advances, the coordinator queues fresh assessments for open
-same-repository PRs targeting it. Queuing replaces any previous result on the
+same-repository PRs targeting it. GitHub may continue to report an older
+`pull_request.base.sha` even after that branch advances: sfstack resolves the
+current default-branch ref separately, preserves the API-reported base SHA as
+`base.reported_sha` in its normalized PR snapshot, and pins the live ref as
+the actual assessment base. The final quality gate refreshes that same ref and
+rejects genuine head or branch-tip changes.
+
+GitHub may also omit the PR association from an authenticated `workflow_run`
+event. The coordinator then finds an unambiguous same-repository open PR by
+matching both the signal's exact head SHA and branch name against GitHub's
+current pull request data; ambiguous matches cannot dispatch.
+
+ Queuing replaces any previous result on the
 same PR head with a pending check. The controller pins the PR head, current base,
 and current default-branch policy revision. It rechecks these identities before
 publishing success. Superseded runs may finish, but cannot overwrite a check
@@ -233,7 +254,11 @@ not grant the assessed change permission to merge, modify source, or deploy.
 ## Validate after merging
 
 The new automatic path becomes active only after these workflows reach the
-default branch. Use an open same-repository PR or create a disposable pilot PR:
+default branch. In particular, a PR editing the review workflow cannot activate
+its own changed bot admission policy: the current default-branch compiled
+review is still used until the fix is merged. Its pre-merge automated
+`sfstack quality` check may therefore remain failed even while ordinary
+validation passes. Use an open same-repository PR or create a disposable pilot PR:
 
 1. Push a small acceptable change and observe **sfstack PR signal**, the
    coordinator, and the dispatched controller. Verify that `sfstack quality`

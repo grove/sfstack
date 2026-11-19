@@ -44,7 +44,7 @@ class FakeGitHub:
     @staticmethod
     def pull(number=1, head=HEAD, base=BASE, head_repository=REPOSITORY):
         return {"number": number, "state": "open", "title": "Fixture PR",
-                "head": {"sha": head, "repo": {"full_name": head_repository}},
+                "head": {"sha": head, "ref": "candidate", "repo": {"full_name": head_repository}},
                 "base": {"sha": base, "ref": "main", "repo": {"full_name": REPOSITORY}}}
 
     def add_run(self, identifier, workflow=QUALITY, event="workflow_dispatch", attempt=1,
@@ -145,6 +145,32 @@ class GitHubAutomationTests(unittest.TestCase):
         self.assertEqual(CHECK_NAME, check["name"])
         self.assertEqual(owner(1, BASE, "run", 100, 1, ""), check_owner(check))
         self.assertEqual(BASE, publication["controller_sha"])
+
+    def test_current_base_snapshot_replaces_stale_pr_base_without_mutating_api(self):
+        self.api.pulls[1]["base"]["sha"] = "d" * 40
+        result = self.host.start(1)
+        self.assertTrue(result["eligible"])
+        self.assertEqual(BASE, result["pr"]["base"]["sha"])
+        self.assertEqual("d" * 40, result["pr"]["base"]["reported_sha"])
+        self.assertEqual("d" * 40, self.api.pulls[1]["base"]["sha"])
+        snapshot = self.host.snapshot(1)
+        self.assertEqual(result["pr"], snapshot)
+
+    def test_new_controller_assesses_old_pr_base_at_current_branch_tip(self):
+        self.api.tip = "c" * 40
+        self.assertEqual(BASE, self.api.pulls[1]["base"]["sha"])
+        host = self.new_host(101, head=self.api.tip)
+        result = host.start(1)
+        self.assertTrue(result["eligible"])
+        self.assertEqual(self.api.tip, result["publication"]["base_sha"])
+        self.assertEqual(self.api.tip, result["pr"]["base"]["sha"])
+        self.assertEqual(BASE, result["pr"]["base"]["reported_sha"])
+
+    def test_snapshot_rejects_changed_controller_revision(self):
+        self.api.tip = "c" * 40
+        with self.assertRaisesRegex(ValueError, "policy advanced"):
+            self.host.snapshot(1)
+        self.assertEqual([], self.api.mutations)
 
     def test_stale_expected_head_or_base_does_not_acquire_or_modify_check(self):
         for expected_head, expected_base in (("c" * 40, BASE), (HEAD, "d" * 40)):
@@ -272,6 +298,27 @@ class GitHubAutomationTests(unittest.TestCase):
         self.assertEqual("request", check_owner(check)["k"])
         self.assertFalse(any("artifacts" in call[1] for call in self.api.calls))
 
+    def test_empty_signal_pr_association_resolves_exact_current_branch_and_head(self):
+        coordinator, signal, event = self.signal()
+        signal["pull_requests"] = []
+        self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
+        self.assertEqual("queued", next(iter(self.api.checks.values()))["status"])
+
+    def test_empty_signal_association_never_guesses_ambiguous_or_stale_prs(self):
+        for variant in ("ambiguous", "branch", "head"):
+            with self.subTest(variant=variant):
+                self.api = FakeGitHub()
+                coordinator, signal, event = self.signal()
+                signal["pull_requests"] = []
+                if variant == "ambiguous":
+                    self.api.pulls[2] = FakeGitHub.pull(2)
+                elif variant == "branch":
+                    signal["head_branch"] = "unrelated"
+                else:
+                    signal["head_sha"] = "f" * 40
+                self.assertEqual([], coordinator.dispatch(event)["dispatched"])
+                self.assertEqual([], self.api.mutations)
+
     def test_signal_provenance_cannot_be_spoofed_by_name_or_artifact(self):
         for key, value in (("workflow_id", 999), ("path", ".github/workflows/spoof.yml"),
                            ("event", "workflow_dispatch"), ("repository", {"full_name": "other/repo"}),
@@ -326,7 +373,7 @@ class GitHubAutomationTests(unittest.TestCase):
         publication = self.start()
         self.check(publication).update({"status": "completed", "conclusion": "success"})
         self.api.tip = "c" * 40
-        self.api.pulls[1]["base"]["sha"] = self.api.tip
+        # GitHub can keep reporting the previous base SHA after main advances.
         self.api.pulls[2] = FakeGitHub.pull(2, head_repository="outside/fork", base=self.api.tip)
         coordinator = self.new_host(200, EVENTS, "push", head=self.api.tip)
         result = coordinator.dispatch({"ref": "refs/heads/main", "after": self.api.tip, "deleted": False})
@@ -417,6 +464,12 @@ class GitHubPublicationEvidenceTests(unittest.TestCase):
         self.assertFalse(self.host.publish(self.publication, self.result, "failure")["published"])
         self.assertEqual(writes, len(self.api.mutations))
 
+    def test_historical_pr_base_sha_does_not_invalidate_current_assessment(self):
+        self.api.pulls[1]["base"]["sha"] = "d" * 40
+        result = self.host.publish(self.publication, self.result, "success")
+        self.assertEqual("success", result["conclusion"])
+        self.assertEqual("success", self.api.checks[self.publication["check_id"]]["conclusion"])
+
     def test_failure_evidence_cannot_be_moved_to_a_passing_candidate(self):
         negative = self.directory / "regression/defective/result"
         result = self.host.publish(self.publication, negative, "success")
@@ -489,7 +542,8 @@ class GitHubPublicationEvidenceTests(unittest.TestCase):
                     self.host.validate_result(self.publication, self.result)
 
     def test_base_or_head_movement_before_publication_blocks_current_success(self):
-        self.api.pulls[1]["base"]["sha"] = "f" * 40
+        # The branch ref, rather than the historical PR base.sha, advanced.
+        self.api.tip = "f" * 40
         result = self.host.publish(self.publication, self.result, "success")
         self.assertEqual("failure", result["conclusion"])
         self.assertIn("advanced", result["reason"])

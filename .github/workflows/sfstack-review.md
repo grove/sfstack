@@ -1,6 +1,9 @@
 ---
 description: Review an immutable sfstack candidate and submit a contract-shaped report.
 on:
+  # The trusted default-branch coordinator dispatches as github-actions[bot].
+  # Authorize only that service actor in addition to ordinary human write roles.
+  bots: ["github-actions[bot]"]
   workflow_call:
     inputs:
       head-sha:

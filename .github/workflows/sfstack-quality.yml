@@ -215,12 +215,14 @@ jobs:
         with:
           name: sfstack-agent-review-${{ github.run_attempt }}
           path: agent-review
-      - name: Re-read the pull request before applying the gate
+      - name: Re-read the live PR head and default-branch tip before the gate
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ inputs.pr-number }}
-        run: gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > current-pr.json
+        run: >-
+          python controller/integrations/github/automation.py snapshot
+          --pr-number "$PR_NUMBER" --out current-pr.json
       - name: Validate evidence and apply sfstack quality policy
         env:
           AW_RESULT: ${{ needs.review.result }}

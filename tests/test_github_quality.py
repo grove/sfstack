@@ -390,6 +390,8 @@ class GitHubWorkflowBoundaryTests(unittest.TestCase):
         self.assertIn("quality.py verify", jobs["verify"])
         self.assertRegex(jobs["quality_gate"], r"(?m)^    if: always\(\) && needs.start_check.outputs.eligible == 'true'\s*$")
         self.assertIn("quality.py finalize", jobs["quality_gate"])
+        self.assertIn("automation.py snapshot", jobs["quality_gate"])
+        self.assertNotIn('gh api "repos/$GITHUB_REPOSITORY/pulls', jobs["quality_gate"])
         self.assertRegex(jobs["publish"], r"(?m)^    if: always\(\)\s*$")
 
     def test_all_metadata_writers_share_a_serial_lock_and_never_checkout_candidates(self):
@@ -413,6 +415,19 @@ class GitHubWorkflowBoundaryTests(unittest.TestCase):
                 self.assertNotIn("persist-credentials: true", job)
         for job in coordinator.values():
             self.assertNotIn("download-artifact", job)
+
+    def test_agentic_review_allows_only_trusted_dispatch_bot_and_human_roles(self):
+        # The trusted controller's workflow_dispatch is performed by
+        # github-actions[bot], not a human repository collaborator.
+        # gh-aw pre_activation must permit that actor without roles: all.
+        authored = (ROOT / ".github/workflows/sfstack-review.md").read_text()
+        compiled = (ROOT / ".github/workflows/sfstack-review.lock.yml").read_text()
+        self.assertIn('  bots: ["github-actions[bot]"]', authored)
+        self.assertNotIn("  roles: all", authored)
+        self.assertIn('GH_AW_ALLOWED_BOTS: "github-actions[bot]"', compiled)
+        self.assertIn('GH_AW_REQUIRED_ROLES: "admin,maintainer,write"', compiled)
+        self.assertEqual(1, compiled.count("GH_AW_ALLOWED_BOTS:"))
+        self.assertNotIn("GH_AW_ALLOWED_BOTS: \"dependabot", compiled)
 
     def test_pr_signal_has_no_credentials_or_candidate_execution(self):
         source = (ROOT / ".github/workflows/sfstack-pr-signal.yml").read_text()
