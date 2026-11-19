@@ -520,7 +520,8 @@ class SoftwareHost(automation.Host):
             raise ValueError("Default branch advanced; dispatch a fresh Software Factory run.")
         return repository, source, actor
 
-    def prepare(self, repo, issue_number, paths, acceptance, output, at=None):
+    def prepare(self, repo, issue_number, paths, acceptance, output, at=None,
+                mode="change", regression_file=None):
         repository, _, actor = self.admitted()
         if not automation.positive(issue_number):
             raise ValueError("Expected a positive issue number.")
@@ -530,7 +531,8 @@ class SoftwareHost(automation.Host):
         if issue.get("number") != issue_number:
             raise ValueError("Issue identity mismatch.")
         return prepare(repo, issue, self.repository, self.run_id, self.attempt, paths, acceptance, output,
-                       at=at, actor=actor, base_branch=repository["default_branch"])
+                       at=at, actor=actor, base_branch=repository["default_branch"],
+                       mode=mode, regression_file=regression_file)
 
     def current(self, target):
         repository, _, actor = self.admitted()
@@ -550,7 +552,9 @@ class SoftwareHost(automation.Host):
         if (gate.get("passed") is not True or gate.get("status") != "passed" or gate.get("reasons") != []
                 or gate.get("mutation_authorized") is not False or gate.get("input_digest") != run["subject"]["input_digest"]
                 or gate.get("candidate_sha") != candidate.get("head_sha")
-                or set(gate.get("digests", {})) != {"candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json"}
+                or set(gate.get("digests", {})) != (
+                     {"candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json"}
+                     | ({"defect-evidence.json", "diagnosis.json", "red.patch"} if target["mode"] == "defect" else set()))
                 or any(digest(result / path) != value for path, value in gate["digests"].items())):
             raise ValueError("Build gate is negative, incomplete, or its evidence was modified.")
         response, _ = load_response(result / "submission.json", run, target)
@@ -580,6 +584,8 @@ class SoftwareHost(automation.Host):
                         or selected["kind"] == "unittest" and (type(observed.get("tests_run")) is not int
                             or observed["tests_run"] < 1 or observed.get("tests_skipped") != 0 or observed.get("expected_failures") != 0)):
                     problems.append("Verification lacks a substantive passing host check.")
+        if target["mode"] == "defect":
+            defect.validate_evidence(repo, target, candidate, response, result, run, at, MAX_AGE)
         if problems:
             raise ValueError("Invalid build evidence: " + "; ".join(problems))
         artifacts = self.pages(f"actions/runs/{self.run_id}/artifacts", "artifacts")
@@ -620,9 +626,11 @@ class SoftwareHost(automation.Host):
         pulls = self.pages("pulls?" + urlencode({"state": "all", "head": self.repository.split('/')[0] + ":" + branch}))
         evidence_url = f"https://github.com/{self.repository}/actions/runs/{self.run_id}/artifacts/{artifact['id']}"
         title = f"[sfstack] {target['issue']['title']}"[:240]
+        defect_record = load_json(result / "defect-evidence.json") if target["mode"] == "defect" else None
         body = "\n".join([
             f"Implements the selected increment from #{target['issue']['number']}.", "",
             "## Acceptance criteria", "", *[f"- {c['description']}" for c in target['criteria']], "",
+            *(defect.pr_section(target, defect_record) if defect_record else []),
             "## Evidence", "", f"- [Build evidence and retained host logs]({evidence_url})",
             f"- Base: `{target['base_sha']}`", f"- Verified candidate: `{candidate['head_sha']}`", "",
             "Created by sfstack's bounded Software Factory. Local verification passed. A separate Quality Factory assessment is requested for this exact head.",
@@ -680,6 +688,8 @@ def main(argv=None):
     prep = commands.add_parser("prepare")
     for name in ("repo", "issue-number", "allowed-paths", "acceptance-criteria", "out"):
         prep.add_argument("--" + name, required=True)
+    prep.add_argument("--mode", choices=("change", "defect"), default="change")
+    prep.add_argument("--regression-file", default="")
     rendering = commands.add_parser("render")
     for name in ("bundle", "candidate", "out"):
         rendering.add_argument("--" + name, required=True)
@@ -697,7 +707,8 @@ def main(argv=None):
             quality.check_actions_run(args.bundle)
         if args.command == "prepare":
             result = host.prepare(args.repo, int(args.issue_number), automation.strict_json(args.allowed_paths),
-                                  automation.strict_json(args.acceptance_criteria), args.out)
+                                  automation.strict_json(args.acceptance_criteria), args.out,
+                                  mode=args.mode, regression_file=args.regression_file)
         elif args.command == "render":
             result = render(args.bundle, args.candidate, args.out)
         elif args.command == "verify":
