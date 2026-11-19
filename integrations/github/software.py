@@ -259,20 +259,43 @@ def load_response(path, run, target):
     if len(raw) > MAX_SUBMISSION:
         raise ValueError("Agent submission exceeds the bounded transport size.")
     outer = automation.strict_json(raw)
-    items = outer.get("items") if isinstance(outer, dict) else None
-    # gh-aw's live safe-output transport adds an output_id alongside the
-    # documented type and payload. It identifies the envelope, not a new grant.
-    if (not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], dict)
-            or items[0].get("type") != "submit_change"
-            or not {"type", "change_json"}.issubset(items[0])
-            or not set(items[0]).issubset({"type", "change_json", "output_id"})
-            or not isinstance(items[0]["change_json"], str)
-            or ("output_id" in items[0]
-                and (not isinstance(items[0]["output_id"], str)
-                     or not items[0]["output_id"].startswith("so_")
-                     or len(items[0]["output_id"]) > 128))):
+    # gh-aw records all safe outputs, including advisory noops, in one envelope.
+    # An informational noop does not grant authority to alter the candidate.
+    if (not isinstance(outer, dict) or "items" not in outer
+            or not set(outer).issubset({"items", "errors"})
+            or outer.get("errors", []) != []):
+        raise ValueError("Agent safe-output envelope is invalid or reports errors.")
+    items = outer["items"]
+    if not isinstance(items, list) or not 1 <= len(items) <= 3:
+        raise ValueError("Expected exactly one submit_change and at most two advisory noops.")
+
+    def valid_output_id(item):
+        return ("output_id" not in item
+                or (isinstance(item["output_id"], str)
+                    and re.fullmatch(r"so_[A-Za-z0-9_-]{1,125}", item["output_id"]) is not None))
+
+    change = items[0]
+    if (not isinstance(change, dict) or change.get("type") != "submit_change"
+            or not {"type", "change_json"}.issubset(change)
+            or not set(change).issubset({"type", "change_json", "output_id"})
+            or not isinstance(change["change_json"], str) or not valid_output_id(change)):
         raise ValueError("Expected exactly one submit_change safe output.")
-    response = automation.strict_json(items[0]["change_json"])
+    output_ids = set()
+    for item in items:
+        if not isinstance(item, dict) or not valid_output_id(item):
+            raise ValueError("Invalid safe-output metadata.")
+        if "output_id" in item:
+            if item["output_id"] in output_ids:
+                raise ValueError("Duplicate safe-output identifier.")
+            output_ids.add(item["output_id"])
+    for item in items[1:]:
+        if (item.get("type") != "noop"
+                or not {"type", "message"}.issubset(item)
+                or not set(item).issubset({"type", "message", "output_id"})
+                or not isinstance(item["message"], str)
+                or len(item["message"]) > 2000):
+            raise ValueError("Only bounded advisory noops may accompany submit_change.")
+    response = automation.strict_json(change["change_json"])
     errors = list(Draft202012Validator(load_json(HERE / "change.schema.json")).iter_errors(response))
     if errors:
         raise ValueError("Agent change response does not match the closed schema: " + errors[0].message[:500])

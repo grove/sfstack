@@ -325,6 +325,66 @@ class GitHubSoftwareTests(SoftwareFixture):
                     software.load_response(self.submission, load_json(self.bundle / "run.json"),
                                            load_json(self.bundle / "target.json"))
 
+    def test_live_gh_aw_noop_after_submission_is_advisory_not_a_second_change(self):
+        # Reproduces the real 44621190636 transport shape (one submit_change,
+        # a terminal noop, and a separate empty errors array).
+        self.prepare()
+        self.response()
+        wrapper = load_json(self.submission)
+        wrapper["items"][0]["output_id"] = "so_tdQh6myFQEKy"
+        wrapper["items"].append({
+            "type": "noop", "output_id": "so_qiZt5Q-GSrqu",
+            "message": "submit_change was called with the completed documentation change; no further action needed.",
+        })
+        wrapper["errors"] = []
+        self.write(self.submission, wrapper)
+        result = self.verify()
+        self.assertTrue(result["passed"])
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(wrapper, load_json(self.result / "submission.json"))
+        self.assertEqual(self.base, load_json(self.result / "candidate.json")["base_sha"])
+
+    def test_noop_transport_cannot_smuggle_an_extra_change_or_an_error(self):
+        self.prepare()
+        self.response()
+        original = load_json(self.submission)
+        original["items"][0]["output_id"] = "so_change"
+        noop = {"type": "noop", "output_id": "so_noop", "message": "Done."}
+        run = load_json(self.bundle / "run.json")
+        target = load_json(self.bundle / "target.json")
+        cases = {
+            "duplicate-change": {"items": [original["items"][0], original["items"][0]]},
+            "noop-only": {"items": [noop]},
+            "noop-before-change": {"items": [noop, original["items"][0]]},
+            "unknown-output": {"items": [original["items"][0], {"type": "create_issue", "message": "bad"}]},
+            "extra-noop-field": {"items": [original["items"][0], {**noop, "permissions": "write"}]},
+            "duplicate-output-id": {"items": [original["items"][0], {**noop, "output_id": "so_change"}]},
+            "invalid-noop-id": {"items": [original["items"][0], {**noop, "output_id": "not-gh-aw"}]},
+            "invalid-noop-message": {"items": [original["items"][0], {**noop, "message": 17}]},
+            "oversized-noop-message": {"items": [original["items"][0], {**noop, "message": "x" * 2001}]},
+            "three-noops": {"items": [original["items"][0], noop, noop, noop]},
+            "reported-errors": {"items": [original["items"][0], noop], "errors": ["failed"]},
+            "invalid-error-envelope": {"items": [original["items"][0]], "errors": None},
+            "extra-envelope-field": {"items": [original["items"][0]], "override": True},
+        }
+        for name, wrapper in cases.items():
+            with self.subTest(name=name):
+                self.write(self.submission, wrapper)
+                with self.assertRaises(ValueError):
+                    software.load_response(self.submission, run, target)
+                self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
+
+    def test_two_documented_noops_can_follow_one_change(self):
+        self.prepare()
+        self.response()
+        wrapper = load_json(self.submission)
+        wrapper["items"].extend([
+            {"type": "noop", "output_id": "so_a", "message": "Complete."},
+            {"type": "noop", "output_id": "so_b", "message": "No more work."},
+        ])
+        self.write(self.submission, wrapper)
+        self.assertTrue(self.verify()["passed"])
+
     def test_multiple_submissions_are_not_silently_selected(self):
         self.prepare()
         self.response()
