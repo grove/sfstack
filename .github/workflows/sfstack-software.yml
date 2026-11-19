@@ -17,6 +17,16 @@ on:
         description: 'JSON array of required outcomes, e.g. ["Document retry recovery steps."]'
         required: true
         type: string
+      repair-mode:
+        description: 'change keeps v0.1 behavior; defect requires independent RED/GREEN evidence'
+        required: true
+        default: change
+        type: choice
+        options: [change, defect]
+      regression-file:
+        description: 'Defect mode only; exact NEW tests/test_*.py file within allowed-paths'
+        required: false
+        type: string
 
 run-name: "sfstack software / issue #${{ inputs.issue-number }}"
 
@@ -62,11 +72,14 @@ jobs:
           ISSUE_NUMBER: ${{ inputs.issue-number }}
           ALLOWED_PATHS: ${{ inputs.allowed-paths }}
           ACCEPTANCE_CRITERIA: ${{ inputs.acceptance-criteria }}
+          REPAIR_MODE: ${{ inputs.repair-mode }}
+          REGRESSION_FILE: ${{ inputs.regression-file }}
         run: >-
           python controller/integrations/github/software.py prepare
           --repo controller --issue-number "$ISSUE_NUMBER"
           --allowed-paths "$ALLOWED_PATHS"
-          --acceptance-criteria "$ACCEPTANCE_CRITERIA" --out inputs
+          --acceptance-criteria "$ACCEPTANCE_CRITERIA"
+          --mode "$REPAIR_MODE" --regression-file "$REGRESSION_FILE" --out inputs
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sfstack-software-inputs-${{ github.run_attempt }}
