@@ -49,6 +49,10 @@ def validate_response(response, target):
         if "diagnosis" in response:
             raise ValueError("Unrequested diagnosis in change mode.")
         return
+    # A negative submission reports inability to diagnose or repair and must
+    # remain publish-blocked, not be turned into an invalid positive envelope.
+    if response["status"] != "passed":
+        return
     record = response.get("diagnosis")
     if (not isinstance(record, dict) or set(record) != set(FIELDS + LIST_FIELDS)
             or any(not isinstance(record.get(k), str) or not record[k].strip() for k in FIELDS)
