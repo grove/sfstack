@@ -73,11 +73,9 @@ def run(output):
     started = perf_counter()
     cases = {variant: one_case(output / variant, variant)
              for variant in ("repaired", "unfixed", "unreproduced")}
-    base = {item["base_sha"] for item in cases.values()}
-    if len(base) != 1:
-        # Test fixtures include environment-dependent timestamped commit
-        # identities; invariant is per-run baseline vs RED ancestry instead.
-        raise ValueError("Expected common initial fixture revision.")
+    if any(item["base_sha"] == item["red_head_sha"] for item in cases.values()
+           if item["red_head_sha"] is not None):
+        raise ValueError("A test-only RED revision must differ from its pinned base.")
     summary = {
         "kind": "executed-software-defect-repair-regression",
         "cases": cases,
