@@ -70,6 +70,56 @@ integration regression, not a bare-agent versus skills experiment, a held-out
 effectiveness result, or evidence of production isolation. Execute unfamiliar
 candidate code only in a host-provided sandbox.
 
+## Execute the GitHub bridge failure and repair path
+
+```sh
+python evals/run_github_regression.py --output /tmp/sfstack-github-regression
+```
+
+This companion regression exercises the same `prepare`, `verify`, `render`, and
+`finalize` functions used by the [GitHub integration](../docs/how-to/run-github.md).
+It creates a disposable Git repository, commits the known inventory defect, and
+runs the six retained behavior checks. It then commits the repair and runs the
+same checks under a fresh run identity. Both candidates keep the same PR base;
+each assessment records its own exact head, inputs, log hashes, and source reports.
+
+| Candidate | Actual verification | Quality gate | Mutation authorization |
+| --- | --- | --- | --- |
+| Defective equality boundary | Six tests run; `test_exact` fails. | Failed; the failed verification report survives a positive fixture review. | Denied. |
+| Repaired commit | The same six tests pass. | Passed under the automated pilot policy. | Denied. |
+
+`summary.json` links the retained logs and assessments. The command exits nonzero
+if the expected failure or recovery disappears. The same exercise runs in
+`tests/test_github_regression.py`, and validation CI retains its output as the
+`github-regression` artifact.
+
+The PR metadata and positive review are explicitly synthetic inputs. No GitHub
+API or Copilot model is invoked, so this checks deterministic evidence handling
+and failure propagation, not live PR publication or the agent's ability to find
+a defect. The passing case uses the GitHub pilot's automated-review policy;
+neither case establishes independent human approval or grants mutation rights.
+The separate local quality regression above keeps independent review required
+and therefore remains inconclusive for its corrected candidate.
+
+## Execute the bounded Software Factory handoff
+
+```sh
+python evals/run_software_regression.py --output /tmp/sfstack-software-regression
+```
+
+This regression exercises the actual issue-input preparation, build-contract
+rendering, scoped file reconstruction, immutable Git identity, and host
+verification used by the [Software Factory](../docs/how-to/run-software-factory.md).
+An unfixed inventory proposal fails the six behavioral checks. A separate fixed
+proposal passes the same checks with a different candidate commit. Both retain
+the original issue and criteria, submission, source bytes, logs, and gate result.
+Validation CI publishes these records as `software-regression`.
+
+The selected issue and builder responses are explicitly synthetic. The Git
+commits, subprocess checks, and host decisions are real. This demonstrates that
+an optimistic builder response cannot override a behavioral failure; it does
+not measure live Copilot implementation, GitHub publication, or human approval.
+
 ## Initial observed exercise
 
 On 2026-11-19, one isolated agent exercise used the diagnosis, implementation, and

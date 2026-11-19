@@ -1,7 +1,9 @@
 """The GitHub bridge retains real observations and fails closed at handoffs."""
 from __future__ import annotations
 
+from contextlib import redirect_stderr, redirect_stdout
 from copy import deepcopy
+import io
 import json
 from pathlib import Path
 import re
@@ -9,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -133,6 +136,27 @@ class GitHubQualityTests(unittest.TestCase):
         self.assertTrue(assessment["evidence"])
         self.assertEqual("", self.git("status", "--porcelain"))
 
+    def test_review_includes_pinned_pr_acceptance_intent(self):
+        self.prepare()
+        response = self.review()
+        self.assertIn("pull-request-intent", {item["id"] for item in response["criteria"]})
+        specification = load_json(self.bundle / "specification.json")["payload"]
+        self.assertEqual(self.pr["body"], specification["pull_request_context"]["body"])
+        response["criteria"] = [item for item in response["criteria"] if item["id"] != "pull-request-intent"]
+        self.write(self.review_path, {"items": [{"type": "submit_review", "review_json": json.dumps(response)}]})
+        self.assertEqual("blocked", self.finalize()["status"])
+
+    def test_changed_acceptance_description_invalidates_otherwise_green_review(self):
+        self.prepare()
+        self.review()
+        current = deepcopy(self.pr)
+        current["body"] = "The public answer must be 99."
+        current_path = self.directory / "current-pr.json"
+        self.write(current_path, current)
+        result = self.finalize(current_pr_path=current_path)
+        self.assertEqual("blocked", result["status"])
+        self.assertTrue(any("acceptance description changed" in reason for reason in result["reasons"]))
+
     def test_agent_success_cannot_override_a_real_test_failure(self):
         self.prepare("failed")
         self.assertEqual("failed", self.report["status"])
@@ -178,6 +202,53 @@ class GitHubQualityTests(unittest.TestCase):
         self.review()
         self.assertNotEqual("passed", self.finalize(agent_result="failure")["status"])
 
+    def test_cancelled_or_skipped_agent_cannot_reuse_a_passing_submission(self):
+        self.prepare()
+        self.review()
+        for state in ("cancelled", "skipped"):
+            with self.subTest(state=state):
+                result = github_quality.finalize(
+                    self.bundle, self.verification, self.review_path, self.pr_path, state,
+                    self.directory / ("result-" + state), at=self.at,
+                )
+                self.assertEqual("blocked", result["status"])
+                self.assertTrue(any(state in reason for reason in result["reasons"]))
+                self.assertTrue(Path(result["assessment"]).is_file())
+
+    def test_cli_retains_failed_assessment_and_returns_a_failing_exit_status(self):
+        self.prepare("failed")
+        self.review()
+        output = self.directory / "result"
+        with patch.dict("os.environ", {"GITHUB_RUN_ID": "1234", "GITHUB_RUN_ATTEMPT": "1"}), redirect_stdout(io.StringIO()):
+            code = github_quality.main([
+                "finalize", "--bundle", str(self.bundle), "--verification", str(self.verification),
+                "--review", str(self.review_path), "--current-pr", str(self.pr_path),
+                "--agent-result", "success", "--out", str(output),
+            ])
+        self.assertEqual(2, code)
+        gate = load_json(output / "quality-gate.json")
+        self.assertEqual("failed", gate["status"])
+        self.assertFalse(gate["success"])
+        self.assertTrue((output / gate["assessment"]).is_file())
+
+    def test_cli_missing_verification_produces_a_blocked_record(self):
+        self.prepare()
+        self.review()
+        (self.verification / "verification-report.json").unlink()
+        output = self.directory / "result"
+        with patch.dict("os.environ", {"GITHUB_RUN_ID": "1234", "GITHUB_RUN_ATTEMPT": "1"}), redirect_stderr(io.StringIO()):
+            code = github_quality.main([
+                "finalize", "--bundle", str(self.bundle), "--verification", str(self.verification),
+                "--review", str(self.review_path), "--current-pr", str(self.pr_path),
+                "--agent-result", "success", "--out", str(output),
+            ])
+        self.assertNotEqual(0, code)
+        gate = load_json(output / "quality-gate.json")
+        self.assertEqual("blocked", gate["status"])
+        self.assertFalse(gate["success"])
+        self.assertTrue(gate["reasons"])
+        self.assertIn("**Verdict: blocked**", (output / "summary.md").read_text())
+
     def test_new_pr_head_invalidates_the_old_assessment(self):
         self.prepare()
         self.review()
@@ -186,6 +257,26 @@ class GitHubQualityTests(unittest.TestCase):
         current_path = self.directory / "current-pr.json"
         self.write(current_path, current)
         self.assertNotEqual("passed", self.finalize(current_pr_path=current_path)["status"])
+
+    def test_advanced_base_invalidates_a_review_of_the_same_head(self):
+        self.prepare()
+        self.review()
+        current = deepcopy(self.pr)
+        current["base"]["sha"] = "f" * 40
+        current_path = self.directory / "current-pr.json"
+        self.write(current_path, current)
+        result = self.finalize(current_pr_path=current_path)
+        self.assertEqual("blocked", result["status"])
+        self.assertTrue(any("base" in reason for reason in result["reasons"]))
+
+    def test_closed_pr_cannot_receive_quality_clearance(self):
+        self.prepare()
+        self.review()
+        current = deepcopy(self.pr)
+        current["state"] = "closed"
+        current_path = self.directory / "current-pr.json"
+        self.write(current_path, current)
+        self.assertEqual("blocked", self.finalize(current_pr_path=current_path)["status"])
 
     def test_pr_diff_excludes_unrelated_changes_on_an_advanced_base(self):
         self.git("checkout", "--quiet", "-b", "advanced-base", self.base)
@@ -297,22 +388,76 @@ class GitHubQualityTests(unittest.TestCase):
 
 
 class GitHubWorkflowBoundaryTests(unittest.TestCase):
-    def test_compiled_workflow_has_no_write_permissions_and_gate_runs_after_failures(self):
-        # Both authored Actions and compiler output are part of the trust
-        # boundary. Check their emitted permission scalars without introducing
-        # a YAML dependency into sfstack's portable test environment.
-        paths = [ROOT / ".github/workflows/sfstack-quality.yml",
-                 ROOT / ".github/workflows/sfstack-review.lock.yml"]
-        for path in paths:
-            with self.subTest(workflow=path.name):
-                source = path.read_text(encoding="utf-8")
-                self.assertIsNone(re.search(r"(?m)^\s+[a-z-]+:\s*['\"]?write['\"]?\s*(?:#.*)?$", source))
-                self.assertIsNone(re.search(r"(?m)^\s*permissions:\s*['\"]?write-all", source))
-        source = paths[0].read_text(encoding="utf-8")
-        gate = re.search(r"(?ms)^  quality_gate:\n(.*?)(?=^  [a-z_]+:\n|\Z)", source)
-        self.assertIsNotNone(gate, "The deterministic final gate must remain a workflow job.")
-        self.assertRegex(gate.group(1), r"(?m)^    if: always\(\)\s*$")
-        self.assertIn("quality.py finalize", gate.group(1))
+    @staticmethod
+    def jobs(source):
+        return dict(re.findall(r"(?ms)^  ([a-z_]+):\n(.*?)(?=^  [a-z_]+:\n|\Z)",
+                               source.split("\njobs:\n", 1)[1]))
+
+    def test_agent_and_candidate_jobs_have_no_publication_permissions(self):
+        # Job boundaries, rather than filtering the candidate's environment,
+        # prevent source execution from inheriting the publisher credential.
+        compiled = (ROOT / ".github/workflows/sfstack-review.lock.yml").read_text()
+        source = (ROOT / ".github/workflows/sfstack-quality.yml").read_text()
+        write = r"(?m)^\s+[a-z-]+:\s*['\"]?write['\"]?\s*(?:#.*)?$"
+        self.assertIsNone(re.search(write, compiled))
+        self.assertIsNone(re.search(write, source.split("\njobs:\n", 1)[0]))
+        jobs = self.jobs(source)
+        self.assertEqual({"start_check", "publish"}, {name for name, job in jobs.items() if re.search(write, job)})
+        for name in ("prepare", "verify", "review", "quality_gate"):
+            with self.subTest(job=name):
+                self.assertIsNone(re.search(write, jobs[name]))
+        self.assertNotIn("COPILOT_GITHUB_TOKEN", jobs["verify"])
+        self.assertIn("needs.prepare.outputs.head-sha", jobs["verify"])
+        self.assertIn("quality.py verify", jobs["verify"])
+        self.assertRegex(jobs["quality_gate"], r"(?m)^    if: always\(\) && needs.start_check.outputs.eligible == 'true'\s*$")
+        self.assertIn("quality.py finalize", jobs["quality_gate"])
+        self.assertIn("automation.py snapshot", jobs["quality_gate"])
+        self.assertNotIn('gh api "repos/$GITHUB_REPOSITORY/pulls', jobs["quality_gate"])
+        self.assertRegex(jobs["publish"], r"(?m)^    if: always\(\)\s*$")
+
+    def test_all_metadata_writers_share_a_serial_lock_and_never_checkout_candidates(self):
+        controller = self.jobs((ROOT / ".github/workflows/sfstack-quality.yml").read_text())
+        coordinator = self.jobs((ROOT / ".github/workflows/sfstack-quality-events.yml").read_text())
+        for name, job in ((name, controller[name]) for name in ("start_check", "publish")):
+            with self.subTest(job=name):
+                self.assertRegex(job, r"(?m)^      checks: write\s*$")
+                self.assertNotIn("actions: write", job)
+        self.assertIn("actions: write", coordinator["dispatch"])
+        self.assertNotIn("actions: write", coordinator["reconcile"])
+        for name, job in {**{key: controller[key] for key in ("start_check", "publish")}, **coordinator}.items():
+            with self.subTest(job=name):
+                self.assertIn("group: sfstack-quality-publication-${{ github.repository }}", job)
+                self.assertIn("queue: max", job)
+                self.assertNotIn("cancel-in-progress: true", job)
+                self.assertNotIn("path: candidate", job)
+                self.assertNotIn("quality.py", job)
+                self.assertNotIn("COPILOT_GITHUB_TOKEN", job)
+                self.assertEqual(job.count("uses: actions/checkout@"), job.count("ref: ${{ github.workflow_sha }}"))
+                self.assertNotIn("persist-credentials: true", job)
+        for job in coordinator.values():
+            self.assertNotIn("download-artifact", job)
+
+    def test_agentic_review_allows_only_trusted_dispatch_bot_and_human_roles(self):
+        # The trusted controller's workflow_dispatch is performed by
+        # github-actions[bot], not a human repository collaborator.
+        # gh-aw pre_activation must permit that actor without roles: all.
+        authored = (ROOT / ".github/workflows/sfstack-review.md").read_text()
+        compiled = (ROOT / ".github/workflows/sfstack-review.lock.yml").read_text()
+        self.assertIn('  bots: ["github-actions[bot]"]', authored)
+        self.assertNotIn("  roles: all", authored)
+        self.assertIn('GH_AW_ALLOWED_BOTS: "github-actions[bot]"', compiled)
+        self.assertIn('GH_AW_REQUIRED_ROLES: "admin,maintainer,write"', compiled)
+        self.assertEqual(1, compiled.count("GH_AW_ALLOWED_BOTS:"))
+        self.assertNotIn("GH_AW_ALLOWED_BOTS: \"dependabot", compiled)
+
+    def test_pr_signal_has_no_credentials_or_candidate_execution(self):
+        source = (ROOT / ".github/workflows/sfstack-pr-signal.yml").read_text()
+        self.assertIn("permissions: {}", source)
+        self.assertIn("pull_request:", source)
+        self.assertNotIn("pull_request_target", source)
+        self.assertNotIn("uses:", source)
+        self.assertNotIn("secrets.", source)
+        self.assertNotIn("github.token", source)
 
 
 if __name__ == "__main__":
