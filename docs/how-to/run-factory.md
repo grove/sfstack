@@ -4,6 +4,11 @@ Use this guide when building a controller around sfstack. The repository supplie
 skills, contracts, workflow recipes, validation, and offline reference checks.
 The controller is responsible for executing work safely against real services.
 
+Software delivery may consume an independently produced
+[Quality Factory assessment](run-quality.md). Require it explicitly in the
+host's policy and verify the same fixed subject, run and actual evidence;
+never treat a quality report as an action grant or relabel another run.
+
 ## 1. Establish the run
 
 Select a workflow and validate it before execution. Resolve every external input

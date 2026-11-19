@@ -5,6 +5,11 @@ observed outcomes. Its useful unit is a controlled transition with evidence, not
 an unrestricted agent session. sfstack supplies the work definitions and
 interchange contracts from which that controller can be built.
 
+The separate [Quality Factory mode](operating-modes.md) reuses these same
+skills, artifact and policy boundaries for independent code assessment. It can
+assess external PRs and fixed snapshots without building them; Software
+Factory may consume its reports at authorized review/release gates.
+
 ## Responsibilities in the system
 
 ```mermaid

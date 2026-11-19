@@ -1,0 +1,231 @@
+{
+  "schema_version": "1.0",
+  "id": "quality-risk",
+  "mode": "quality",
+  "summary": "Quality Factory with explicitly selected security and compatibility assessments in addition to verification and review.",
+  "inputs": [
+    "request"
+  ],
+  "steps": [
+    {
+      "id": "orient",
+      "skill": "sf-map-project",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "clarify",
+      "skill": "sf-clarify-outcome",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "specify",
+      "skill": "sf-write-specification",
+      "needs": [
+        "clarify",
+        "orient"
+      ],
+      "bindings": {
+        "outcome-brief": "step:clarify:outcome-brief",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "scope",
+      "skill": "sf-scope-candidate",
+      "needs": [
+        "orient",
+        "specify"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "project-context": "step:orient:project-context",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "tests",
+      "skill": "sf-design-tests",
+      "needs": [
+        "scope",
+        "specify",
+        "orient"
+      ],
+      "bindings": {
+        "specification": "step:specify:specification",
+        "project-context": "step:orient:project-context",
+        "change-set": "step:scope:change-set"
+      }
+    },
+    {
+      "id": "impact",
+      "skill": "sf-assess-impact",
+      "needs": [
+        "scope",
+        "orient",
+        "specify"
+      ],
+      "bindings": {
+        "change-set": "step:scope:change-set",
+        "project-context": "step:orient:project-context",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "verify",
+      "skill": "sf-verify-change",
+      "needs": [
+        "scope",
+        "tests",
+        "specify"
+      ],
+      "bindings": {
+        "change-set": "step:scope:change-set",
+        "test-plan": "step:tests:test-plan",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "security",
+      "skill": "sf-assess-security",
+      "needs": [
+        "scope",
+        "orient",
+        "specify"
+      ],
+      "bindings": {
+        "project-context": "step:orient:project-context",
+        "change-set": "step:scope:change-set",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "compatibility",
+      "skill": "sf-check-compatibility",
+      "needs": [
+        "scope",
+        "orient",
+        "specify"
+      ],
+      "bindings": {
+        "specification": "step:specify:specification",
+        "change-set": "step:scope:change-set",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "review",
+      "skill": "sf-review-change",
+      "needs": [
+        "verify",
+        "impact",
+        "scope",
+        "specify",
+        "orient",
+        "security",
+        "compatibility"
+      ],
+      "accept_statuses": {
+        "verify": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "impact": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "security": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "compatibility": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ]
+      },
+      "bindings": {
+        "change-set": "step:scope:change-set",
+        "specification": "step:specify:specification",
+        "verification-report": "step:verify:verification-report",
+        "impact-assessment": "step:impact:impact-assessment",
+        "project-context": "step:orient:project-context",
+        "security-assessment": "step:security:security-assessment",
+        "compatibility-report": "step:compatibility:compatibility-report"
+      }
+    },
+    {
+      "id": "consolidate",
+      "skill": "sf-consolidate-quality",
+      "needs": [
+        "review",
+        "verify",
+        "impact",
+        "scope",
+        "specify",
+        "security",
+        "compatibility"
+      ],
+      "accept_statuses": {
+        "review": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "verify": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "impact": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "security": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "compatibility": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ]
+      },
+      "bindings": {
+        "request": "input:request",
+        "change-set": "step:scope:change-set",
+        "specification": "step:specify:specification",
+        "verification-report": "step:verify:verification-report",
+        "review-report": "step:review:review-report",
+        "impact-assessment": "step:impact:impact-assessment",
+        "security-assessment": "step:security:security-assessment",
+        "compatibility-report": "step:compatibility:compatibility-report"
+      }
+    }
+  ],
+  "completion": [
+    "consolidate"
+  ]
+}

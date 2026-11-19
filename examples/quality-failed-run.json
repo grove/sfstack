@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "run_id": "tutorial-run",
+  "subject": {
+    "revision": "demo-candidate-7b4a",
+    "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+    "environment": "demo-isolated-profile"
+  },
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effect_scopes": {},
+  "policy": "policy.json",
+  "inputs": {
+    "request": "records/quality-request.json"
+  },
+  "completed": {
+    "orient": [
+      "records/project-context.json"
+    ],
+    "clarify": [
+      "records/quality-outcome-brief.json"
+    ],
+    "specify": [
+      "records/specification.json"
+    ],
+    "scope": [
+      "records/quality-change-set.json"
+    ],
+    "tests": [
+      "records/quality-test-plan.json"
+    ],
+    "impact": [
+      "records/quality-impact-assessment.json"
+    ],
+    "verify": [
+      "records/quality-verification-failed.json"
+    ],
+    "review": [
+      "records/quality-review-failed.json"
+    ]
+  }
+}

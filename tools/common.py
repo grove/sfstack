@@ -137,7 +137,28 @@ def workflow_errors(workflow, catalog):
         covered.update(ancestors.get(identifier, set()))
     if set(steps) - covered:
         errors.append("Completion omits terminal work: " + ", ".join(sorted(set(steps) - covered)))
+    quality_mode = workflow.get("mode", "software") == "quality"
+    if quality_mode:
+        # A quality recipe is observational. A declared mutation cannot become
+        # authorized just because a policy happens to contain a write grant.
+        for identifier, step in steps.items():
+            contract = catalog.get(step["skill"], {})
+            forbidden = set(contract.get("capabilities", [])) & {
+                "workspace.write", "vcs.write", "tracker.write", "review.write",
+                "release.publish", "deployment.write", "communication.send",
+            }
+            if contract.get("effects") or contract.get("conditional_effects") or forbidden:
+                errors.append(f"{identifier}: quality workflows cannot declare mutations.")
+        if not any(
+            "quality-assessment" in catalog.get(steps[identifier]["skill"], {}).get("outputs", [])
+            for identifier in workflow["completion"] if identifier in steps
+        ):
+            errors.append("Quality workflow must complete with a quality-assessment artifact.")
+    elif any("accept_statuses" in step for step in steps.values()):
+        errors.append("accept_statuses is only permitted in quality workflows.")
     for identifier, step in steps.items():
+        if set(step.get("accept_statuses", {})) - set(step["needs"]):
+            errors.append(f"{identifier}: accept_statuses names a non-dependency.")
         contract = catalog.get(step["skill"])
         if contract is None:
             errors.append(f"{identifier}: unknown skill {step['skill']}.")
@@ -167,7 +188,8 @@ def workflow_errors(workflow, catalog):
     return errors
 
 
-def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None):
+def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None,
+                     allow_nonpassing=False):
     """Check a supplied record and the retained local evidence bytes it cites."""
     path = Path(path)
     artifact = load_json(path)
@@ -178,6 +200,7 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None):
     payload_schema = {
         "verification-report": "payload-verification-report",
         "review-report": "payload-review-report",
+        "quality-assessment": "payload-quality-assessment",
     }.get(artifact["artifact_type"])
     if payload_schema:
         try:
@@ -196,9 +219,9 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None):
         problems.append(f"{prefix}: observation is in the future.")
     elif age > max_age:
         problems.append(f"{prefix}: evidence age exceeds policy.")
-    if artifact["status"] != "passed":
+    if artifact["status"] != "passed" and not allow_nonpassing:
         problems.append(f"{prefix}: status is {artifact['status']}.")
-    if not artifact["checks"]:
+    if artifact["status"] == "passed" and not artifact["checks"]:
         problems.append(f"{prefix}: no completion checks recorded.")
     evidence = {item["id"]: item for item in artifact["evidence"]}
     if len(evidence) != len(artifact["evidence"]):
@@ -214,25 +237,60 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None):
         except (ValueError, OSError) as exc:
             problems.append(f"{prefix}: evidence {item['id']} unavailable: {exc}")
     for check in artifact["checks"]:
-        if check["status"] != "passed":
+        if check["status"] != "passed" and (artifact["status"] == "passed" or not allow_nonpassing):
             problems.append(f"{prefix}: check {check['id']} is {check['status']}.")
-        if not check["evidence"] or not set(check["evidence"]).issubset(evidence):
+        if (not set(check["evidence"]).issubset(evidence)
+                or (check["status"] in {"passed", "failed"} and not check["evidence"])):
             problems.append(f"{prefix}: check {check['id']} lacks valid evidence references.")
     if artifact["artifact_type"] == "verification-report":
         payload = artifact["payload"]
+        passing_claim = artifact["status"] == "passed" or not allow_nonpassing
         count = payload.get("executed_count")
-        if type(count) is not int or count < 1:
+        if passing_claim and (type(count) is not int or count < 1):
             problems.append(f"{prefix}: verification recorded no executed checks.")
         required = payload.get('required_count')
-        if type(required) is not int or required < 1 or type(count) is not int or count < required:
+        if type(required) is not int or required < 1 or type(count) is not int or (passing_claim and count < required):
             problems.append(f"{prefix}: required check count is missing, invalid, or not met.")
-        if type(payload.get("failed_count")) is not int or payload["failed_count"] != 0:
+        failures = payload.get("failed_count")
+        if type(failures) is not int or (passing_claim and failures != 0):
             problems.append(f"{prefix}: verification failure count is nonzero or unknown.")
-        if payload.get("skipped_required") != []:
+        if type(count) is int and type(failures) is int and failures > count:
+            problems.append(f"{prefix}: verification failure count exceeds executed checks.")
+        if passing_claim and payload.get("skipped_required") != []:
             problems.append(f"{prefix}: required checks were skipped or not accounted for.")
         cited = {ref for check in artifact['checks'] for ref in check['evidence']}
-        if not any(item['kind'] in {'test', 'observation'} and item['id'] in cited for item in artifact['evidence']):
+        if passing_claim and not any(item['kind'] in {'test', 'observation'} and item['id'] in cited for item in artifact['evidence']):
             problems.append(f"{prefix}: verification has no cited execution evidence.")
+    if artifact["artifact_type"] == "quality-assessment":
+        payload = artifact["payload"]
+        # Malformed payloads were already reported by the schema check above.
+        # Avoid interpreting their fields or raising an uncaught type error.
+        try:
+            validate_schema(payload, "payload-quality-assessment")
+        except ValueError:
+            pass
+        else:
+            covered = set(payload["coverage"]["evaluated"])
+            required = set(payload["coverage"]["required"])
+            reports = {item["artifact_type"]: item for item in payload["reports"]}
+            if len(reports) != len(payload["reports"]):
+                problems.append(f"{prefix}: duplicate quality report type.")
+            if any(item["evidence_id"] not in evidence for item in reports.values()):
+                problems.append(f"{prefix}: quality report lacks retained evidence.")
+            if artifact["status"] == "passed":
+                core = {"verification-report", "review-report"}
+                if not core.issubset(covered):
+                    problems.append(f"{prefix}: passing quality requires verification and review.")
+                if required - covered:
+                    problems.append(f"{prefix}: required quality coverage is missing.")
+                if (covered - set(reports)
+                        or any(reports[kind]["status"] != "passed" for kind in covered & set(reports))):
+                    problems.append(f"{prefix}: a selected quality report is absent or non-passing.")
+                if required & set(payload["coverage"]["omitted"]):
+                    problems.append(f"{prefix}: required quality coverage is marked omitted.")
+                if any(item["blocking"] and item["disposition"] not in {"resolved", "rejected", "accepted-risk"}
+                       for item in payload["findings"]):
+                    problems.append(f"{prefix}: unresolved blocking quality finding.")
     if artifact['artifact_type'] == 'review-report':
         findings = artifact['payload'].get('findings')
         if not isinstance(findings, list):
@@ -252,6 +310,6 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None):
                     valid_waiver = (disposition == 'accepted-risk' and isinstance(waiver, dict)
                         and all(isinstance(waiver.get(k), str) and waiver[k].strip() for k in ('actor', 'decision', 'evidence'))
                         and waiver_evidence and waiver_evidence['kind'] == 'approval')
-                    if not valid_waiver:
+                    if not valid_waiver and (artifact["status"] == "passed" or not allow_nonpassing):
                         problems.append(f"{prefix}: unresolved blocking review finding.")
     return artifact, problems

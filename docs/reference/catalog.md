@@ -1,6 +1,6 @@
 # Skill catalog
 
-The library contains 37 independent skills. Names follow `sf-verb-object`; each
+The library contains 39 independent skills. Names follow `sf-verb-object`; each
 entry links to the complete instruction package. The required inputs listed here
 are artifact types. Every skill also receives the shared execution context.
 Optional inputs, effects, retry limits, and detailed completion conditions are
@@ -14,6 +14,7 @@ and the [workflow recipes](workflows.md) for composition.
 
 | Skill | Responsibility | Required inputs | Output |
 | --- | --- | --- | --- |
+| [sf-scope-candidate](../../skills/sf-scope-candidate/SKILL.md) | Normalize an immutable existing snapshot, external PR or supplied change without implementing it. | `request`, `project-context` | `change-set` |
 | [sf-map-project](../../skills/sf-map-project/SKILL.md) | Map a project into evidenced behavior, ownership boundaries, and verification paths. | `request` | `project-context` |
 | [sf-clarify-outcome](../../skills/sf-clarify-outcome/SKILL.md) | Turn an ambiguous request into a bounded, testable outcome. | `request` | `outcome-brief` |
 | [sf-validate-opportunity](../../skills/sf-validate-opportunity/SKILL.md) | Assess whether a proposed outcome addresses a supported need and merits investment. | `outcome-brief` | `opportunity-assessment` |
@@ -26,6 +27,7 @@ and the [workflow recipes](workflows.md) for composition.
 
 | Skill | Responsibility | Required inputs | Output |
 | --- | --- | --- | --- |
+| [sf-consolidate-quality](../../skills/sf-consolidate-quality/SKILL.md) | Consolidate verification, review, impact and selected specialist findings without remediation. | `change-set`, `verification-report`, `review-report` | `quality-assessment` |
 | [sf-build-change](../../skills/sf-build-change/SKILL.md) | Implement one bounded work unit with requirement-linked evidence and a reviewable change set. | `work-plan`, `specification` | `change-set` |
 | [sf-diagnose-defect](../../skills/sf-diagnose-defect/SKILL.md) | Establish a defect mechanism through a faithful reproduction and discriminating experiments. | `request`, `project-context` | `diagnosis` |
 | [sf-refactor-structure](../../skills/sf-refactor-structure/SKILL.md) | Improve internal structure while preserving an explicitly defined behavioral contract. | `request`, `project-context` | `change-set` |
@@ -73,6 +75,10 @@ and the [workflow recipes](workflows.md) for composition.
 | [sf-evaluate-skills](../../skills/sf-evaluate-skills/SKILL.md) | Evaluate whether a versioned skill or workflow improves realistic outcomes. | `request` | `evaluation-report` |
 
 ## Boundaries worth preserving
+
+- `sf-scope-candidate` describes an externally produced candidate; it does not
+  build or change it. `sf-consolidate-quality` reports a scoped verdict, not a
+  permission to remediate or release.
 
 - `sf-design-tests` defines a verification approach; `sf-verify-change` executes and evaluates it.
 - `sf-diagnose-defect` establishes a cause; `sf-build-change` applies an agreed implementation scope.

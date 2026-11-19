@@ -10,7 +10,7 @@ Write one sentence describing the intended outcome. Separate questions about
 user intent from questions answerable by reading or executing the project.
 Use `sf-clarify-outcome` for the former and `sf-map-project` for the latter.
 
-Classify the work as discovery, feature, defect, refactor, migration, release,
+Classify the work as quality assessment, discovery, feature, defect, refactor, migration, release,
 incident, retirement, or improvement. Reuse an existing approved specification or
 work plan only after checking that it still describes the current task.
 
@@ -18,6 +18,8 @@ work plan only after checking that it still describes the current task.
 
 | Situation | Starting point | Evidence that matters |
 | --- | --- | --- |
+| Existing code, external PR, or supplied change to assess without editing | `quality` | Exact candidate identity, verification, review, scoped findings and limitations. |
+| Security/compatibility-sensitive quality audit | `quality-risk` | Same fixed candidate plus selected security and compatibility evidence. |
 | Uncertain value or problem | `discovery` | User/problem evidence, constraints, and an explicit decision. |
 | One bounded behavior increment | `feature` | Acceptance criteria, one work unit, test results, and review. |
 | Known incorrect behavior | `defect` | A representative reproduction, cause, repair, and original-path replay. |
@@ -65,6 +67,12 @@ typed optional inputs for the specialist reports, and `sf-prepare-release` can
 consume the relevant assessments at the release boundary. Use the consumer's
 actual contract to choose a binding; do not pass a report under a different type
 merely because its prose seems relevant.
+
+The independent [Quality Factory](run-quality.md) starts from a read-only
+candidate and **does not** call `sf-build-change`. Add risk specialists to
+its review and consolidation steps using the same typed bindings as Software
+Factory. Non-passing reports can be forwarded only to observational consumers,
+not to integration or deployment gates.
 
 ## 4. Remove work only with a reason
 
