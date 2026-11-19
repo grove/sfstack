@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "id": "verification-interface",
+  "kind": "verification",
+  "capabilities": [
+    "execution.run"
+  ],
+  "implementation": "declaration",
+  "operations": [
+    {
+      "name": "run-check",
+      "capability": "execution.run",
+      "description": "Run a declared check in an isolated approved environment; return captured command, exit, count and evidence.",
+      "idempotency": "not-applicable",
+      "concurrency": "read-only",
+      "inputs": [
+        "check-definition",
+        "subject"
+      ],
+      "outputs": [
+        "verification-evidence"
+      ]
+    }
+  ]
+}

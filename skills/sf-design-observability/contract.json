@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-design-observability",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Define how operators will detect, explain, and respond to service behavior.",
+  "inputs": [
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": true
+    },
+    {
+      "name": "solution-design",
+      "description": "Chosen design, interfaces, alternatives, and decision rationale.",
+      "required": false
+    },
+    {
+      "name": "incident-record",
+      "description": "Current impact, incident timeline, mitigations, and evidence.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "observability-plan"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "User-visible outcomes map to indicators, thresholds, owners, and response actions.",
+    "Instrumentation validation and sensitive-data limits are specified."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

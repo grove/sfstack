@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-write-specification",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Describe externally observable behavior, constraints, and acceptance criteria for a bounded change.",
+  "inputs": [
+    {
+      "name": "outcome-brief",
+      "description": "Agreed outcome, scope, constraints, and unresolved decisions.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Current behavior and relevant system constraints.",
+      "required": false
+    },
+    {
+      "name": "domain-model",
+      "description": "Shared terms and business rules.",
+      "required": false
+    },
+    {
+      "name": "opportunity-assessment",
+      "description": "Validated needs and learning constraints.",
+      "required": false
+    },
+    {
+      "name": "experience-design",
+      "description": "Interaction flows and experience requirements.",
+      "required": false
+    },
+    {
+      "name": "privacy-assessment",
+      "description": "Current privacy assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "specification"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Every in-scope outcome has observable acceptance criteria.",
+    "Failure, compatibility, and operational requirements are addressed where applicable.",
+    "Open decisions and non-goals are explicit."
+  ],
+  "failure_modes": [
+    "A material scope or behavior decision is unresolved: blocked.",
+    "Source artifacts disagree without an established priority: inconclusive."
+  ],
+  "retry_limit": 1
+}

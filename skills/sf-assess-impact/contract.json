@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-assess-impact",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Identify downstream obligations and evidence needed to change a system safely.",
+  "inputs": [
+    {
+      "name": "change-set",
+      "description": "Candidate, changed interfaces, data, configuration, and behavioral claims.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Relevant system boundaries, consumers, and verification paths.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Intended compatibility and quality obligations.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "impact-assessment"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Consequential direct and indirect consumers are identified.",
+    "Safety claims have evidence or explicit pending checks.",
+    "Rollout, compatibility, and recovery obligations are recorded."
+  ],
+  "failure_modes": [
+    "A consequential boundary cannot be inspected: blocked for that assessment.",
+    "Safety depends on an unresolved assumption: inconclusive.",
+    "The candidate demonstrably violates an existing obligation: failed."
+  ],
+  "retry_limit": 1
+}

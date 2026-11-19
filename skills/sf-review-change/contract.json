@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-review-change",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Review a fixed candidate for requirement conformance, correctness, and maintainability using supported findings.",
+  "inputs": [
+    {
+      "name": "change-set",
+      "description": "Fixed candidate, source diff, changed surfaces, and implementation claims.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Authoritative requirements and acceptance criteria.",
+      "required": true
+    },
+    {
+      "name": "verification-report",
+      "description": "Current results and evidence for required checks.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Architecture, ownership, and repository standards.",
+      "required": false
+    },
+    {
+      "name": "impact-assessment",
+      "description": "Downstream risks and compatibility evidence.",
+      "required": false
+    },
+    {
+      "name": "security-assessment",
+      "description": "Current security assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "privacy-assessment",
+      "description": "Current privacy assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "accessibility-report",
+      "description": "Current accessibility report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "compatibility-report",
+      "description": "Current compatibility report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "performance-report",
+      "description": "Current performance report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "dependency-report",
+      "description": "Current dependency report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "exploration-report",
+      "description": "Current exploration report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "documentation-report",
+      "description": "Current documentation report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "review-report"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Requirement conformance and engineering quality are assessed separately.",
+    "Actionable findings identify a plausible failure and supporting evidence.",
+    "Reviewer identity and any independence claim are grounded in host-supplied facts."
+  ],
+  "failure_modes": [
+    "A blocking defect or unresolved required finding remains: failed.",
+    "Required source, specification, or evidence is unavailable: blocked.",
+    "Evidence is stale or review independence required by policy cannot be established: inconclusive."
+  ],
+  "retry_limit": 1
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-coordinate-work",
+  "version": "1.0.0",
+  "stage": "improve",
+  "summary": "Coordinate a bounded graph of work across available agents without losing ownership or evidence.",
+  "inputs": [
+    {
+      "name": "work-plan",
+      "description": "Dependency graph, work-item acceptance criteria, ownership, and limits.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": false
+    },
+    {
+      "name": "request",
+      "description": "Requested outcome, scope, constraints, and operating limits.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "coordination-record"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Every dispatched item has dependency evidence, scoped authority, an owner, and a budget.",
+    "Completion and integration rely on current artifacts rather than worker assertions."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 2
+}

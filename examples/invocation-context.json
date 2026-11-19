@@ -1,0 +1,85 @@
+{
+  "run_id": "tutorial-run",
+  "mode": "planning only",
+  "request": {
+    "outcome": "Persist an account display name.",
+    "acceptance": [
+      "Reject empty input without changing saved data."
+    ]
+  },
+  "authorization": {
+    "external_effects": []
+  },
+  "available_capabilities": [
+    "artifact.write"
+  ],
+  "budget": {
+    "max_attempts": 1
+  },
+  "note": "Synthetic input for packaging an invocation; never sends it to a model.",
+  "subject": {
+    "revision": "demo-candidate-7b4a",
+    "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+    "environment": "demo-isolated-profile"
+  },
+  "inputs": {
+    "request": {
+      "schema_version": "1.0",
+      "artifact_id": "demo-request",
+      "artifact_type": "request",
+      "producer": {
+        "skill": "manual-input",
+        "version": "1.0.0"
+      },
+      "run_id": "tutorial-run",
+      "status": "passed",
+      "created_at": "2026-11-19T11:30:00Z",
+      "subject": {
+        "revision": "demo-candidate-7b4a",
+        "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+        "environment": "demo-isolated-profile"
+      },
+      "summary": "Simulated request for the offline tutorial only.",
+      "evidence": [
+        {
+          "id": "fixture",
+          "kind": "input",
+          "uri": "evidence/request.txt",
+          "sha256": "65bb508fd336954adef6beb15e4172c9f3d14e77d09808e39933e3b896ccb787",
+          "description": "Retained synthetic request content supplied by the tutorial host."
+        }
+      ],
+      "checks": [
+        {
+          "id": "example-completion",
+          "status": "passed",
+          "evidence": [
+            "fixture"
+          ],
+          "detail": "Simulated complete output for demonstrating reference evaluation."
+        }
+      ],
+      "unresolved": [
+        "Synthetic fixture; no live integration has been exercised."
+      ],
+      "next_action": "Follow the tutorial; do not use this fixture to authorize live work.",
+      "payload": {
+        "outcome": "Allow a user to save a chosen display name.",
+        "acceptance": [
+          "Persist a valid display name.",
+          "Reject empty names without changing saved data."
+        ],
+        "scope": "An isolated demonstration workspace."
+      }
+    }
+  },
+  "evidence_note": "Embedded input and evidence metadata are synthetic, for tutorial practice only.",
+  "retained_input_evidence": [
+    {
+      "uri": "evidence/request.txt",
+      "sha256": "65bb508fd336954adef6beb15e4172c9f3d14e77d09808e39933e3b896ccb787",
+      "content": "SYNTHETIC TUTORIAL INPUT\nOutcome: persist a nonempty account display name.\nAcceptance: reject an empty name without changing saved data.\nScope: an isolated demonstration workspace; no external effects are authorized.\n"
+    }
+  ],
+  "evidence_handling": "The host supplies these retained bytes and their digest. Cite them as input evidence; when writing a result, retain the supplied bytes under the same relative evidence path. Do not claim to have executed runtime checks."
+}

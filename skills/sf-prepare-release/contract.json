@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-prepare-release",
+  "version": "1.0.0",
+  "stage": "deliver",
+  "summary": "Assemble a reproducible release candidate and a bounded rollout plan.",
+  "inputs": [
+    {
+      "name": "integration-record",
+      "description": "Observed integrated revision, base, verification, and outstanding work.",
+      "required": true
+    },
+    {
+      "name": "verification-report",
+      "description": "Checks and evidence bound to the exact candidate and inputs.",
+      "required": false
+    },
+    {
+      "name": "migration-plan",
+      "description": "Compatibility phases, data invariants, validation, and recovery procedure.",
+      "required": false
+    },
+    {
+      "name": "observability-plan",
+      "description": "Service indicators, instrumentation, thresholds, and response ownership.",
+      "required": false
+    },
+    {
+      "name": "request",
+      "description": "Requested outcome, scope, constraints, and operating limits.",
+      "required": false
+    },
+    {
+      "name": "review-report",
+      "description": "Current review report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "security-assessment",
+      "description": "Current security assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "privacy-assessment",
+      "description": "Current privacy assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "accessibility-report",
+      "description": "Current accessibility report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "compatibility-report",
+      "description": "Current compatibility report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "performance-report",
+      "description": "Current performance report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "dependency-report",
+      "description": "Current dependency report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "exploration-report",
+      "description": "Current exploration report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "documentation-report",
+      "description": "Current documentation report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "release-plan"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "vcs.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Release contents and executable artifacts are bound to immutable identities.",
+    "The target, rollout gates, abort conditions, owners, and data-compatible recovery path are explicit."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

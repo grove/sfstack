@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-handle-incident",
+  "version": "1.0.0",
+  "stage": "operate",
+  "summary": "Coordinate evidence, impact assessment, and bounded decisions during a live service incident.",
+  "inputs": [
+    {
+      "name": "request",
+      "description": "Requested outcome, scope, constraints, and operating limits.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": false
+    },
+    {
+      "name": "deployment-record",
+      "description": "Observed deployment identity, revision, environment, and phase.",
+      "required": false
+    },
+    {
+      "name": "observability-plan",
+      "description": "Service indicators, instrumentation, thresholds, and response ownership.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "incident-record"
+  ],
+  "capabilities": [
+    "telemetry.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Impact, timeline, current ownership, decisions, and evidence are maintained.",
+    "Mitigations and communications require their own authority; recovery is confirmed against user outcomes."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

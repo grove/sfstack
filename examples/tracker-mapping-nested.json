@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "id": "nested-export",
+  "fields": {
+    "id": "item.id",
+    "title": "item.title",
+    "description": "item.description",
+    "state": "item.state",
+    "version": "item.version",
+    "dependencies": "item.dependencies",
+    "acceptance": "item.acceptance",
+    "links": "item.links"
+  },
+  "states": {
+    "todo": "queued",
+    "available": "ready",
+    "doing": "active",
+    "waiting": "blocked",
+    "checking": "review",
+    "complete": "done",
+    "dropped": "cancelled"
+  }
+}

@@ -1,0 +1,14 @@
+test_exact_stock_reservation (test_inventory.InventoryTests.test_exact_stock_reservation) ... FAIL
+
+======================================================================
+FAIL: test_exact_stock_reservation (test_inventory.InventoryTests.test_exact_stock_reservation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<candidate>/test_inventory.py", line 10, in test_exact_stock_reservation
+    self.assertEqual(0, reserve(5, 5))
+AssertionError: 0 != None
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (failures=1)

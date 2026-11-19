@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-improve-process",
+  "version": "1.0.0",
+  "stage": "improve",
+  "summary": "Turn observed delivery problems into testable process improvements.",
+  "inputs": [
+    {
+      "name": "request",
+      "description": "Requested outcome, scope, constraints, and operating limits.",
+      "required": true
+    },
+    {
+      "name": "incident-record",
+      "description": "Current impact, incident timeline, mitigations, and evidence.",
+      "required": false
+    },
+    {
+      "name": "evaluation-report",
+      "description": "Versioned evaluation cases, observations, results, and limitations.",
+      "required": false
+    },
+    {
+      "name": "review-report",
+      "description": "Reviewed candidate, findings, dispositions, and unresolved risks.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "improvement-plan"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Each proposed change addresses evidence of a specific failure mechanism.",
+    "The plan defines an owner, measurable outcome, trial window, and reversal condition."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

@@ -1,0 +1,12 @@
+{
+  "key": "DEMO-7",
+  "title": "Persist a display name",
+  "body": "Save a nonempty account display name.",
+  "status": "Ready",
+  "revision": 3,
+  "blocked_by": [],
+  "acceptance": [
+    "Reject empty names."
+  ],
+  "links": []
+}

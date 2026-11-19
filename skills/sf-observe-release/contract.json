@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-observe-release",
+  "version": "1.0.0",
+  "stage": "operate",
+  "summary": "Assess a deployed revision against user outcomes and operational thresholds during a bounded observation window.",
+  "inputs": [
+    {
+      "name": "deployment-record",
+      "description": "Observed deployment identity, revision, environment, and phase.",
+      "required": true
+    },
+    {
+      "name": "release-plan",
+      "description": "Immutable release identity, target, preconditions, rollout, and recovery controls.",
+      "required": false
+    },
+    {
+      "name": "observability-plan",
+      "description": "Service indicators, instrumentation, thresholds, and response ownership.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "release-observation"
+  ],
+  "capabilities": [
+    "deployment.read",
+    "telemetry.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Observations identify the deployed revision, environment, observation window, and baseline.",
+    "A verdict separates revision uncertainty, missing signals, functional failures, and threshold violations."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-clarify-outcome",
+  "version": "1.0.0",
+  "stage": "discover",
+  "summary": "Turn an ambiguous request into a bounded, testable outcome.",
+  "inputs": [
+    {
+      "name": "request",
+      "description": "Requested outcome and any already stated constraints.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Current project behavior and constraints, if available.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "outcome-brief"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "The desired observable outcome and non-goals are explicit.",
+    "Acceptance criteria distinguish success from failure.",
+    "Material open decisions have an owner and disposition."
+  ],
+  "failure_modes": [
+    "A missing business decision prevents an actionable scope: blocked.",
+    "Conflicting goals remain unresolved: inconclusive."
+  ],
+  "retry_limit": 1
+}

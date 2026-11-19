@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-maintain-documentation",
+  "version": "1.0.0",
+  "stage": "build",
+  "summary": "Update documentation to match verified behavior and the reader\u2019s task.",
+  "inputs": [
+    {
+      "name": "change-set",
+      "description": "Candidate behavior, changed surfaces, and verification evidence.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Intended behavior, scope, and accepted terminology.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Documentation locations, audiences, conventions, and existing operational guidance.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "documentation-report"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "workspace.write",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [
+    "workspace.modify"
+  ],
+  "completion_checks": [
+    "Changed behavior is reflected in the relevant documentation surfaces.",
+    "Instructions, examples, links, and claims are checked within the available environment.",
+    "Documentation types and audience needs remain distinct."
+  ],
+  "failure_modes": [
+    "Required example execution or source verification is unavailable: blocked.",
+    "Documentation contradicts observed or specified behavior: failed.",
+    "Material claims cannot be verified: inconclusive."
+  ],
+  "retry_limit": 1
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "deployment-interface",
+  "kind": "deployment",
+  "capabilities": [
+    "deployment.read",
+    "deployment.write"
+  ],
+  "implementation": "declaration",
+  "operations": [
+    {
+      "name": "read-deployment",
+      "capability": "deployment.read",
+      "description": "Resolve the exact deployed revision, artifact digest, environment, health and operation status.",
+      "idempotency": "not-applicable",
+      "concurrency": "read-only",
+      "inputs": [
+        "deployment-ref"
+      ],
+      "outputs": [
+        "deployment-observation"
+      ]
+    },
+    {
+      "name": "apply-release",
+      "capability": "deployment.write",
+      "description": "Apply only an authorized artifact to a pinned target with an operation identifier and idempotency key.",
+      "idempotency": "required",
+      "concurrency": "compare-and-set",
+      "inputs": [
+        "release-plan",
+        "authorization",
+        "expected-version",
+        "idempotency-key"
+      ],
+      "outputs": [
+        "deployment-record"
+      ]
+    }
+  ]
+}

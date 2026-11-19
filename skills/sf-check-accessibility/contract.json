@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-check-accessibility",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Assess whether people with differing access needs can complete the changed journeys.",
+  "inputs": [
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": true
+    },
+    {
+      "name": "change-set",
+      "description": "Exact candidate revision, changed behavior, and implementation scope.",
+      "required": true
+    },
+    {
+      "name": "experience-design",
+      "description": "User journeys, interaction states, content, and design decisions.",
+      "required": false
+    },
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "accessibility-report"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Applicable access needs and criteria are explicitly scoped.",
+    "Findings contain reproducible steps and measured evidence; untested modes remain visible."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

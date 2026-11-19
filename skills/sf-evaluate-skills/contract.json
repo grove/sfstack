@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-evaluate-skills",
+  "version": "1.0.0",
+  "stage": "improve",
+  "summary": "Evaluate whether a versioned skill or workflow improves realistic outcomes.",
+  "inputs": [
+    {
+      "name": "request",
+      "description": "Requested outcome, scope, constraints, and operating limits.",
+      "required": true
+    },
+    {
+      "name": "work-plan",
+      "description": "Dependency graph, work-item acceptance criteria, ownership, and limits.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "evaluation-report"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Cases, baselines, scoring, budgets, and exclusions are fixed before comparing outcomes.",
+    "Results separate structural checks, behavioral trials, statistical uncertainty, and untested environments."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

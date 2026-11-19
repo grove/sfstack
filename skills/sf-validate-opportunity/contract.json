@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-validate-opportunity",
+  "version": "1.0.0",
+  "stage": "discover",
+  "summary": "Assess whether a proposed outcome addresses a supported need and merits investment.",
+  "inputs": [
+    {
+      "name": "outcome-brief",
+      "description": "The proposed problem, audience, outcome, and constraints.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Existing capabilities, operating limits, and relevant observations.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "opportunity-assessment"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Evidence is separated from assumptions and advocacy.",
+    "Alternatives include an appropriate low-investment option.",
+    "The recommendation includes a falsifiable next decision."
+  ],
+  "failure_modes": [
+    "No relevant observation can be obtained: inconclusive.",
+    "Required research or external contact is not authorized: blocked for that activity."
+  ],
+  "retry_limit": 1
+}

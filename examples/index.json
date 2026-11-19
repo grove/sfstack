@@ -1,0 +1,66 @@
+[
+  {
+    "path": "records/request.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/project-context.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/specification.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/change-set.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/verification-report.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/review-report.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/review-status.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/release-plan.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/deployment-record.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "policy.json",
+    "schema": "policy"
+  },
+  {
+    "path": "gate-request.json",
+    "schema": "gate-request"
+  },
+  {
+    "path": "gate-stale-request.json",
+    "schema": "gate-request"
+  },
+  {
+    "path": "feature-run.json",
+    "schema": "run"
+  },
+  {
+    "path": "adapter.json",
+    "schema": "adapter"
+  },
+  {
+    "path": "tracker-mapping.json",
+    "schema": "tracker-mapping"
+  },
+  {
+    "path": "tracker-mapping-nested.json",
+    "schema": "tracker-mapping"
+  }
+]

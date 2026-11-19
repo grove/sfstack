@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-plan-work",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Decompose a specification and design into bounded, dependency-aware work units.",
+  "inputs": [
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, scope, and quality constraints.",
+      "required": true
+    },
+    {
+      "name": "solution-design",
+      "description": "Chosen structure, interfaces, and rollout constraints.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Available verification paths and ownership constraints.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "work-plan"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Every in-scope acceptance criterion is assigned to verifiable work.",
+    "Dependencies form an acyclic graph with a usable ready frontier.",
+    "Integration ownership, verification, and stop conditions are explicit."
+  ],
+  "failure_modes": [
+    "The design leaves a prerequisite decision unresolved: blocked for dependent work.",
+    "A proposed decomposition cannot be verified within its stated bounds: inconclusive."
+  ],
+  "retry_limit": 1
+}

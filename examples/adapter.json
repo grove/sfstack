@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "id": "agent-interface",
+  "kind": "agent",
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "implementation": "declaration",
+  "operations": [
+    {
+      "name": "prepare-invocation",
+      "capability": "workspace.read",
+      "description": "Load one selected skill, contract, protocol and explicitly supplied context.",
+      "idempotency": "not-applicable",
+      "concurrency": "read-only",
+      "inputs": [
+        "skill",
+        "execution-context"
+      ],
+      "outputs": [
+        "invocation"
+      ]
+    },
+    {
+      "name": "collect-result",
+      "capability": "artifact.write",
+      "description": "Collect declared artifacts and execution status, without treating prose as proof of tool execution.",
+      "idempotency": "not-applicable",
+      "concurrency": "read-only",
+      "inputs": [
+        "invocation"
+      ],
+      "outputs": [
+        "artifact"
+      ]
+    }
+  ]
+}

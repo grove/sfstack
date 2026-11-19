@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-evolve-data",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Plan a compatible, recoverable data or schema evolution.",
+  "inputs": [
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": true
+    },
+    {
+      "name": "solution-design",
+      "description": "Chosen design, interfaces, alternatives, and decision rationale.",
+      "required": false
+    },
+    {
+      "name": "change-set",
+      "description": "Exact candidate revision, changed behavior, and implementation scope.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "migration-plan"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Every phase defines invariants, supported reader/writer combinations, and exit checks.",
+    "Recovery addresses data written after rollout and distinguishes reversibility from restoration."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

@@ -1,0 +1,2 @@
+# Retained unified diffs contain a required space on empty context lines.
+evals/reports/**/*.diff -whitespace

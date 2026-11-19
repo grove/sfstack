@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-design-experience",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Design coherent user journeys, interaction states, and presentation rules.",
+  "inputs": [
+    {
+      "name": "outcome-brief",
+      "description": "Users, problem, desired outcomes, assumptions, and scope decisions.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": false
+    },
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "experience-design"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Critical journeys cover normal, empty, error, loading, and recovery states.",
+    "Design decisions link to user needs and include a validation plan."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

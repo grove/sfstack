@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "id": "retirement",
+  "summary": "Produce a verifiable retirement plan covering consumers, retained data, communications, reversibility, and completion criteria; no live deletion.",
+  "inputs": [
+    "request"
+  ],
+  "steps": [
+    {
+      "id": "orient",
+      "skill": "sf-map-project",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "retire",
+      "skill": "sf-retire-component",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "project-context": "step:orient:project-context",
+        "request": "input:request"
+      }
+    }
+  ],
+  "completion": [
+    "retire"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "id": "flat-export",
+  "fields": {
+    "id": "key",
+    "title": "title",
+    "description": "body",
+    "state": "status",
+    "version": "revision",
+    "dependencies": "blocked_by",
+    "acceptance": "acceptance",
+    "links": "links"
+  },
+  "states": {
+    "Backlog": "queued",
+    "Ready": "ready",
+    "Working": "active",
+    "Blocked": "blocked",
+    "In review": "review",
+    "Closed": "done",
+    "Cancelled": "cancelled"
+  }
+}

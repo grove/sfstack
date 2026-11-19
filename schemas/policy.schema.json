@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sfstack:policy:1.0",
+  "title": "sfstack policy",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "grants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "effect": {
+            "enum": [
+              "workspace.modify",
+              "tracker.modify",
+              "review.publish",
+              "integration.modify",
+              "release.publish",
+              "deployment.modify",
+              "data.modify",
+              "external.communicate"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "type": "string",
+                "minLength": 1
+              },
+              "input_digest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "environment": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "revision",
+              "input_digest",
+              "environment"
+            ],
+            "additionalProperties": false
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "actor",
+          "run_id",
+          "effect",
+          "scope",
+          "subject",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "max_evidence_age_seconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "required_artifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "minItems": 0,
+        "uniqueItems": true
+      },
+      "propertyNames": {
+        "enum": [
+          "workspace.modify",
+          "tracker.modify",
+          "review.publish",
+          "integration.modify",
+          "release.publish",
+          "deployment.modify",
+          "data.modify",
+          "external.communicate"
+        ]
+      }
+    },
+    "require_independent_review": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "grants",
+    "max_evidence_age_seconds",
+    "required_artifacts",
+    "require_independent_review"
+  ],
+  "additionalProperties": false
+}

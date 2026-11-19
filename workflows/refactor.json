@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0",
+  "id": "refactor",
+  "summary": "Change internal structure while preserving the supplied behavioral specification, then verify impact and prepare review.",
+  "inputs": [
+    "request",
+    "specification"
+  ],
+  "steps": [
+    {
+      "id": "orient",
+      "skill": "sf-map-project",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "tests",
+      "skill": "sf-design-tests",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "specification": "input:specification",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "refactor",
+      "skill": "sf-refactor-structure",
+      "needs": [
+        "orient",
+        "tests"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "project-context": "step:orient:project-context",
+        "test-plan": "step:tests:test-plan"
+      }
+    },
+    {
+      "id": "document",
+      "skill": "sf-maintain-documentation",
+      "needs": [
+        "refactor"
+      ],
+      "bindings": {
+        "change-set": "step:refactor:change-set",
+        "specification": "input:specification"
+      }
+    },
+    {
+      "id": "impact",
+      "skill": "sf-assess-impact",
+      "needs": [
+        "refactor",
+        "orient",
+        "document"
+      ],
+      "bindings": {
+        "change-set": "step:refactor:change-set",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "verify",
+      "skill": "sf-verify-change",
+      "needs": [
+        "refactor",
+        "tests",
+        "document"
+      ],
+      "bindings": {
+        "change-set": "step:refactor:change-set",
+        "test-plan": "step:tests:test-plan",
+        "specification": "input:specification"
+      }
+    },
+    {
+      "id": "review",
+      "skill": "sf-review-change",
+      "needs": [
+        "impact",
+        "refactor",
+        "verify"
+      ],
+      "bindings": {
+        "change-set": "step:refactor:change-set",
+        "specification": "input:specification",
+        "verification-report": "step:verify:verification-report"
+      }
+    },
+    {
+      "id": "prepare",
+      "skill": "sf-prepare-review",
+      "needs": [
+        "document",
+        "refactor",
+        "verify",
+        "review",
+        "impact"
+      ],
+      "bindings": {
+        "change-set": "step:refactor:change-set",
+        "verification-report": "step:verify:verification-report",
+        "review-report": "step:review:review-report",
+        "specification": "input:specification",
+        "impact-assessment": "step:impact:impact-assessment"
+      }
+    }
+  ],
+  "completion": [
+    "prepare"
+  ]
+}
