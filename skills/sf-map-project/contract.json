@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-map-project",
+  "version": "1.0.0",
+  "stage": "discover",
+  "summary": "Map a project into evidenced behavior, ownership boundaries, and verification paths.",
+  "inputs": [
+    {
+      "name": "request",
+      "description": "Objective, target project, and the area to investigate.",
+      "required": true
+    }
+  ],
+  "outputs": [
+    "project-context"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Relevant entry paths and ownership boundaries have evidence.",
+    "Known verification paths are distinguished from checks actually run.",
+    "Uncertainty and inaccessible areas are recorded."
+  ],
+  "failure_modes": [
+    "Required project content is unavailable: blocked.",
+    "Contradictory evidence prevents locating the requested behavior: inconclusive."
+  ],
+  "retry_limit": 1
+}

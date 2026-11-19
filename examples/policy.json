@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "id": "demo-policy",
+  "grants": [
+    {
+      "id": "demo-grant-workspace",
+      "actor": "demo-owner",
+      "run_id": "tutorial-run",
+      "effect": "workspace.modify",
+      "scope": "workspace:demo",
+      "subject": {
+        "revision": "demo-candidate-7b4a",
+        "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+        "environment": "demo-isolated-profile"
+      },
+      "expires_at": "2026-11-19T13:00:00Z"
+    },
+    {
+      "id": "demo-grant-integration",
+      "actor": "demo-owner",
+      "run_id": "tutorial-run",
+      "effect": "integration.modify",
+      "scope": "repository:demo/change:42",
+      "subject": {
+        "revision": "demo-candidate-7b4a",
+        "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+        "environment": "demo-isolated-profile"
+      },
+      "expires_at": "2026-11-19T13:00:00Z"
+    }
+  ],
+  "max_evidence_age_seconds": 3600,
+  "required_artifacts": {
+    "workspace.modify": [],
+    "tracker.modify": [
+      "work-plan"
+    ],
+    "review.publish": [
+      "change-set",
+      "verification-report",
+      "review-report"
+    ],
+    "integration.modify": [
+      "verification-report",
+      "review-report",
+      "review-status"
+    ],
+    "release.publish": [
+      "release-plan",
+      "verification-report"
+    ],
+    "deployment.modify": [
+      "release-plan",
+      "verification-report"
+    ],
+    "data.modify": [
+      "migration-plan",
+      "verification-report"
+    ],
+    "external.communicate": []
+  },
+  "require_independent_review": true
+}

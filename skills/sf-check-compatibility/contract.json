@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-check-compatibility",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Verify compatibility across producers, consumers, versions, and persisted formats.",
+  "inputs": [
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": true
+    },
+    {
+      "name": "change-set",
+      "description": "Exact candidate revision, changed behavior, and implementation scope.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": false
+    },
+    {
+      "name": "migration-plan",
+      "description": "Compatibility phases, data invariants, validation, and recovery procedure.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "compatibility-report"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "The supported compatibility matrix is explicit and representative contracts are executed.",
+    "Every untested supported combination has a visible limitation or release blocker."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

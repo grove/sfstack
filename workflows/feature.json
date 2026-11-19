@@ -1,0 +1,189 @@
+{
+  "schema_version": "1.0",
+  "id": "feature",
+  "summary": "Deliver one bounded feature increment through implementation, current verification, review, and a scoped review package. Expand larger work into separately selected increments.",
+  "inputs": [
+    "request"
+  ],
+  "steps": [
+    {
+      "id": "orient",
+      "skill": "sf-map-project",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "clarify",
+      "skill": "sf-clarify-outcome",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "domain",
+      "skill": "sf-model-domain",
+      "needs": [
+        "clarify",
+        "orient"
+      ],
+      "bindings": {
+        "outcome-brief": "step:clarify:outcome-brief",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "specify",
+      "skill": "sf-write-specification",
+      "needs": [
+        "clarify",
+        "orient",
+        "domain"
+      ],
+      "bindings": {
+        "outcome-brief": "step:clarify:outcome-brief",
+        "project-context": "step:orient:project-context",
+        "domain-model": "step:domain:domain-model"
+      }
+    },
+    {
+      "id": "design",
+      "skill": "sf-design-solution",
+      "needs": [
+        "specify",
+        "orient",
+        "domain"
+      ],
+      "bindings": {
+        "specification": "step:specify:specification",
+        "project-context": "step:orient:project-context",
+        "domain-model": "step:domain:domain-model"
+      }
+    },
+    {
+      "id": "plan",
+      "skill": "sf-plan-work",
+      "needs": [
+        "specify",
+        "design",
+        "orient"
+      ],
+      "bindings": {
+        "specification": "step:specify:specification",
+        "solution-design": "step:design:solution-design",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "tests",
+      "skill": "sf-design-tests",
+      "needs": [
+        "specify",
+        "orient"
+      ],
+      "bindings": {
+        "specification": "step:specify:specification",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "build",
+      "skill": "sf-build-change",
+      "needs": [
+        "plan",
+        "specify",
+        "design",
+        "tests"
+      ],
+      "bindings": {
+        "work-plan": "step:plan:work-plan",
+        "specification": "step:specify:specification",
+        "solution-design": "step:design:solution-design",
+        "test-plan": "step:tests:test-plan"
+      },
+      "max_work_items": 1
+    },
+    {
+      "id": "document",
+      "skill": "sf-maintain-documentation",
+      "needs": [
+        "build",
+        "specify"
+      ],
+      "bindings": {
+        "change-set": "step:build:change-set",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "impact",
+      "skill": "sf-assess-impact",
+      "needs": [
+        "build",
+        "orient",
+        "document"
+      ],
+      "bindings": {
+        "change-set": "step:build:change-set",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "verify",
+      "skill": "sf-verify-change",
+      "needs": [
+        "build",
+        "tests",
+        "specify",
+        "document"
+      ],
+      "bindings": {
+        "change-set": "step:build:change-set",
+        "test-plan": "step:tests:test-plan",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "review",
+      "skill": "sf-review-change",
+      "needs": [
+        "impact",
+        "build",
+        "specify",
+        "verify"
+      ],
+      "bindings": {
+        "change-set": "step:build:change-set",
+        "specification": "step:specify:specification",
+        "verification-report": "step:verify:verification-report"
+      }
+    },
+    {
+      "id": "prepare",
+      "skill": "sf-prepare-review",
+      "needs": [
+        "document",
+        "build",
+        "verify",
+        "review",
+        "specify",
+        "impact"
+      ],
+      "bindings": {
+        "change-set": "step:build:change-set",
+        "verification-report": "step:verify:verification-report",
+        "review-report": "step:review:review-report",
+        "specification": "step:specify:specification",
+        "impact-assessment": "step:impact:impact-assessment"
+      }
+    }
+  ],
+  "completion": [
+    "prepare"
+  ]
+}

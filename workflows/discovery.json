@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "id": "discovery",
+  "summary": "Turn an uncertain request into an evidence-based opportunity decision, domain model, and specification; no implementation or publication.",
+  "inputs": [
+    "request"
+  ],
+  "steps": [
+    {
+      "id": "orient",
+      "skill": "sf-map-project",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "clarify",
+      "skill": "sf-clarify-outcome",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "value",
+      "skill": "sf-validate-opportunity",
+      "needs": [
+        "clarify",
+        "orient"
+      ],
+      "bindings": {
+        "outcome-brief": "step:clarify:outcome-brief",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "domain",
+      "skill": "sf-model-domain",
+      "needs": [
+        "clarify",
+        "orient"
+      ],
+      "bindings": {
+        "outcome-brief": "step:clarify:outcome-brief",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "specify",
+      "skill": "sf-write-specification",
+      "needs": [
+        "clarify",
+        "orient",
+        "domain",
+        "value"
+      ],
+      "bindings": {
+        "outcome-brief": "step:clarify:outcome-brief",
+        "project-context": "step:orient:project-context",
+        "domain-model": "step:domain:domain-model",
+        "opportunity-assessment": "step:value:opportunity-assessment"
+      }
+    }
+  ],
+  "completion": [
+    "specify"
+  ]
+}

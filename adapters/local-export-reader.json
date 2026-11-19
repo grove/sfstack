@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "id": "local-export-reader",
+  "kind": "tracker",
+  "capabilities": [
+    "tracker.read"
+  ],
+  "implementation": "reference",
+  "operations": [
+    {
+      "name": "normalize-item",
+      "capability": "tracker.read",
+      "description": "Normalize a supplied JSON item through an explicit field and state mapping; no service calls.",
+      "idempotency": "not-applicable",
+      "concurrency": "read-only",
+      "inputs": [
+        "native-item",
+        "tracker-mapping"
+      ],
+      "outputs": [
+        "work-item"
+      ]
+    }
+  ]
+}

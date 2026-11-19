@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "id": "release",
+  "summary": "Maintain review, integrate the exact approved candidate, prepare and deploy an authorized release, and observe the deployed revision.",
+  "inputs": [
+    "review-package",
+    "verification-report",
+    "review-report"
+  ],
+  "steps": [
+    {
+      "id": "maintain",
+      "skill": "sf-maintain-review",
+      "needs": [],
+      "bindings": {
+        "review-package": "input:review-package",
+        "verification-report": "input:verification-report",
+        "review-report": "input:review-report"
+      }
+    },
+    {
+      "id": "integrate",
+      "skill": "sf-integrate-change",
+      "needs": [
+        "maintain"
+      ],
+      "bindings": {
+        "review-status": "step:maintain:review-status",
+        "verification-report": "input:verification-report",
+        "review-report": "input:review-report"
+      }
+    },
+    {
+      "id": "prepare",
+      "skill": "sf-prepare-release",
+      "needs": [
+        "integrate"
+      ],
+      "bindings": {
+        "integration-record": "step:integrate:integration-record",
+        "verification-report": "input:verification-report"
+      }
+    },
+    {
+      "id": "deploy",
+      "skill": "sf-deploy-release",
+      "needs": [
+        "prepare"
+      ],
+      "bindings": {
+        "release-plan": "step:prepare:release-plan",
+        "verification-report": "input:verification-report"
+      }
+    },
+    {
+      "id": "observe",
+      "skill": "sf-observe-release",
+      "needs": [
+        "deploy",
+        "prepare"
+      ],
+      "bindings": {
+        "deployment-record": "step:deploy:deployment-record",
+        "release-plan": "step:prepare:release-plan"
+      }
+    }
+  ],
+  "completion": [
+    "observe"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-design-solution",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Choose a maintainable implementation structure that satisfies a specification and existing system constraints.",
+  "inputs": [
+    {
+      "name": "specification",
+      "description": "Required behavior, acceptance criteria, and quality constraints.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Current structure, ownership, and integration paths.",
+      "required": true
+    },
+    {
+      "name": "domain-model",
+      "description": "Concepts and invariants to preserve.",
+      "required": false
+    },
+    {
+      "name": "impact-assessment",
+      "description": "Known consumers, risks, and compatibility obligations.",
+      "required": false
+    },
+    {
+      "name": "security-assessment",
+      "description": "Current security assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "privacy-assessment",
+      "description": "Current privacy assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "experience-design",
+      "description": "Current experience design evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "observability-plan",
+      "description": "Current observability plan evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "migration-plan",
+      "description": "Current migration plan evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "dependency-report",
+      "description": "Current dependency report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "performance-report",
+      "description": "Current performance report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "solution-design"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "The chosen structure maps to requirements and existing ownership.",
+    "Consequential alternatives and tradeoffs are evaluated.",
+    "Verification, rollout, and recovery boundaries are explicit."
+  ],
+  "failure_modes": [
+    "A missing constraint prevents a safe design choice: blocked.",
+    "Critical assumptions cannot be distinguished with available evidence: inconclusive."
+  ],
+  "retry_limit": 1
+}

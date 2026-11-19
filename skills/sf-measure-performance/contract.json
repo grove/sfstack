@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-measure-performance",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Measure whether a change satisfies an explicit performance or capacity claim.",
+  "inputs": [
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": true
+    },
+    {
+      "name": "change-set",
+      "description": "Exact candidate revision, changed behavior, and implementation scope.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "performance-report"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Comparable baseline and candidate runs verify correct work under a defined workload.",
+    "Results include variability, resource constraints, and the practical consequence of the measurements."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

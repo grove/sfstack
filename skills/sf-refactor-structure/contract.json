@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-refactor-structure",
+  "version": "1.0.0",
+  "stage": "build",
+  "summary": "Improve internal structure while preserving an explicitly defined behavioral contract.",
+  "inputs": [
+    {
+      "name": "request",
+      "description": "Structural problem, intended improvement, scope, and behavior to preserve.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Current implementation, consumers, boundaries, and verification paths.",
+      "required": true
+    },
+    {
+      "name": "test-plan",
+      "description": "Relevant behavioral checks and coverage gaps.",
+      "required": false
+    },
+    {
+      "name": "impact-assessment",
+      "description": "Compatibility and downstream obligations.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "change-set"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "workspace.write",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [
+    "workspace.modify"
+  ],
+  "completion_checks": [
+    "Preserved behavior and permitted internal changes are explicit.",
+    "The new structure improves the stated problem without unrelated redesign.",
+    "Current evidence covers the behavior and compatibility boundaries at risk."
+  ],
+  "failure_modes": [
+    "Behavioral preservation cannot be observed adequately: inconclusive.",
+    "A required environment or dependent contract is unavailable: blocked.",
+    "A preserved behavior regresses: failed."
+  ],
+  "retry_limit": 2
+}

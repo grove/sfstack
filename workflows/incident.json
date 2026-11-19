@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "id": "incident",
+  "summary": "Coordinate an incident tied to an identified deployment and perform scoped recovery when authorized. For diagnosis-only incidents use the incident skill directly.",
+  "inputs": [
+    "request",
+    "deployment-record"
+  ],
+  "steps": [
+    {
+      "id": "respond",
+      "skill": "sf-handle-incident",
+      "needs": [],
+      "bindings": {
+        "request": "input:request",
+        "deployment-record": "input:deployment-record"
+      }
+    },
+    {
+      "id": "recover",
+      "skill": "sf-recover-release",
+      "needs": [
+        "respond"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "deployment-record": "input:deployment-record",
+        "incident-record": "step:respond:incident-record"
+      }
+    }
+  ],
+  "completion": [
+    "recover"
+  ]
+}

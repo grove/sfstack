@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sfstack:adapter:1.0",
+  "title": "sfstack adapter",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "kind": {
+      "enum": [
+        "agent",
+        "tracker",
+        "vcs",
+        "verification",
+        "deployment",
+        "observability",
+        "communication"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "workspace.read",
+          "workspace.write",
+          "execution.run",
+          "tracker.read",
+          "tracker.write",
+          "review.read",
+          "review.write",
+          "vcs.read",
+          "vcs.write",
+          "release.publish",
+          "deployment.read",
+          "deployment.write",
+          "telemetry.read",
+          "communication.send",
+          "artifact.write"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "implementation": {
+      "enum": [
+        "reference",
+        "declaration"
+      ]
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "capability": {
+            "enum": [
+              "workspace.read",
+              "workspace.write",
+              "execution.run",
+              "tracker.read",
+              "tracker.write",
+              "review.read",
+              "review.write",
+              "vcs.read",
+              "vcs.write",
+              "release.publish",
+              "deployment.read",
+              "deployment.write",
+              "telemetry.read",
+              "communication.send",
+              "artifact.write"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "idempotency": {
+            "enum": [
+              "required",
+              "not-applicable"
+            ]
+          },
+          "concurrency": {
+            "enum": [
+              "compare-and-set",
+              "read-only",
+              "isolated"
+            ]
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "name",
+          "capability",
+          "description",
+          "idempotency",
+          "concurrency",
+          "inputs",
+          "outputs"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "kind",
+    "capabilities",
+    "implementation",
+    "operations"
+  ],
+  "additionalProperties": false
+}

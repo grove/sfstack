@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-deploy-release",
+  "version": "1.0.0",
+  "stage": "deliver",
+  "summary": "Execute an authorized release plan and establish the identity of the deployed revision.",
+  "inputs": [
+    {
+      "name": "release-plan",
+      "description": "Immutable release identity, target, preconditions, rollout, and recovery controls.",
+      "required": true
+    },
+    {
+      "name": "verification-report",
+      "description": "Checks and evidence bound to the exact candidate and inputs.",
+      "required": true
+    },
+    {
+      "name": "migration-plan",
+      "description": "Current migration plan evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "observability-plan",
+      "description": "Current observability plan evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "security-assessment",
+      "description": "Current security assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "deployment-record"
+  ],
+  "capabilities": [
+    "deployment.read",
+    "deployment.write",
+    "artifact.write"
+  ],
+  "effects": [
+    "deployment.modify"
+  ],
+  "completion_checks": [
+    "Target, artifact, authorization, and deployment preconditions match the release plan.",
+    "The deployment receipt and independently observed target revision are recorded without inferring health."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

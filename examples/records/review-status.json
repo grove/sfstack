@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "artifact_id": "demo-review-status",
+  "artifact_type": "review-status",
+  "producer": {
+    "skill": "sf-maintain-review",
+    "version": "1.0.0"
+  },
+  "run_id": "tutorial-run",
+  "status": "passed",
+  "created_at": "2026-11-19T11:30:00Z",
+  "subject": {
+    "revision": "demo-candidate-7b4a",
+    "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+    "environment": "demo-isolated-profile"
+  },
+  "summary": "Simulated review-status for the offline tutorial only.",
+  "evidence": [
+    {
+      "id": "fixture",
+      "kind": "observation",
+      "uri": "evidence/fixture.txt",
+      "sha256": "a59ba44cb09c730fad95517781dcaf5c173bb1f8fde13289485c6d1b7468d4ce",
+      "description": "Declared synthetic fixture, not live execution evidence."
+    }
+  ],
+  "checks": [
+    {
+      "id": "example-completion",
+      "status": "passed",
+      "evidence": [
+        "fixture"
+      ],
+      "detail": "Simulated complete output for demonstrating reference evaluation."
+    }
+  ],
+  "unresolved": [
+    "Synthetic fixture; no live integration has been exercised."
+  ],
+  "next_action": "Follow the tutorial; do not use this fixture to authorize live work.",
+  "payload": {
+    "review_reference": "repository:demo/change:42",
+    "head": "demo-candidate-7b4a",
+    "base": "demo-base-1",
+    "readiness": "ready",
+    "findings": [],
+    "checks": [],
+    "updates": [],
+    "next_event": "none"
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "id": "defect",
+  "summary": "Deliver one bounded defect correction through implementation, current verification, review, and a scoped review package. Expand larger work into separately selected increments.",
+  "inputs": [
+    "request",
+    "specification",
+    "work-plan"
+  ],
+  "steps": [
+    {
+      "id": "orient",
+      "skill": "sf-map-project",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "diagnose",
+      "skill": "sf-diagnose-defect",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "tests",
+      "skill": "sf-design-tests",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "specification": "input:specification",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "repair",
+      "skill": "sf-build-change",
+      "needs": [
+        "tests",
+        "diagnose"
+      ],
+      "bindings": {
+        "work-plan": "input:work-plan",
+        "specification": "input:specification",
+        "test-plan": "step:tests:test-plan",
+        "diagnosis": "step:diagnose:diagnosis"
+      },
+      "max_work_items": 1
+    },
+    {
+      "id": "document",
+      "skill": "sf-maintain-documentation",
+      "needs": [
+        "repair"
+      ],
+      "bindings": {
+        "change-set": "step:repair:change-set",
+        "specification": "input:specification"
+      }
+    },
+    {
+      "id": "impact",
+      "skill": "sf-assess-impact",
+      "needs": [
+        "repair",
+        "orient",
+        "document"
+      ],
+      "bindings": {
+        "change-set": "step:repair:change-set",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "verify",
+      "skill": "sf-verify-change",
+      "needs": [
+        "repair",
+        "tests",
+        "document"
+      ],
+      "bindings": {
+        "change-set": "step:repair:change-set",
+        "test-plan": "step:tests:test-plan",
+        "specification": "input:specification"
+      }
+    },
+    {
+      "id": "review",
+      "skill": "sf-review-change",
+      "needs": [
+        "impact",
+        "repair",
+        "verify"
+      ],
+      "bindings": {
+        "change-set": "step:repair:change-set",
+        "specification": "input:specification",
+        "verification-report": "step:verify:verification-report"
+      }
+    },
+    {
+      "id": "prepare",
+      "skill": "sf-prepare-review",
+      "needs": [
+        "document",
+        "repair",
+        "verify",
+        "review",
+        "impact"
+      ],
+      "bindings": {
+        "change-set": "step:repair:change-set",
+        "verification-report": "step:verify:verification-report",
+        "review-report": "step:review:review-report",
+        "specification": "input:specification",
+        "impact-assessment": "step:impact:impact-assessment"
+      }
+    }
+  ],
+  "completion": [
+    "prepare"
+  ]
+}

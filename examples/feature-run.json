@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "run_id": "tutorial-run",
+  "subject": {
+    "revision": "demo-candidate-7b4a",
+    "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+    "environment": "demo-isolated-profile"
+  },
+  "capabilities": [
+    "workspace.read",
+    "workspace.write",
+    "execution.run",
+    "vcs.read",
+    "vcs.write",
+    "review.read",
+    "review.write",
+    "artifact.write"
+  ],
+  "effect_scopes": {
+    "workspace.modify": "workspace:demo",
+    "review.publish": "repository:demo/change:42"
+  },
+  "policy": "policy.json",
+  "inputs": {
+    "request": "records/request.json"
+  },
+  "completed": {}
+}

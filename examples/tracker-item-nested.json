@@ -1,0 +1,14 @@
+{
+  "item": {
+    "id": "DEMO-7",
+    "title": "Persist a display name",
+    "description": "Save a nonempty account display name.",
+    "state": "available",
+    "version": 3,
+    "dependencies": [],
+    "acceptance": [
+      "Reject empty names."
+    ],
+    "links": []
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-verify-change",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Collect and assess current evidence that a specific candidate satisfies its required checks.",
+  "inputs": [
+    {
+      "name": "change-set",
+      "description": "Exact candidate, scope, changed surfaces, and implementation claims.",
+      "required": true
+    },
+    {
+      "name": "test-plan",
+      "description": "Required checks, expected observations, environments, and evidence requirements.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Authoritative criteria for resolving verification ambiguity.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "verification-report"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Every required check has a recorded result on the identified candidate.",
+    "Passing checks reference substantive execution evidence.",
+    "Missing, skipped, stale, and failed checks cannot be reported as passed."
+  ],
+  "failure_modes": [
+    "A required check observes incorrect behavior: failed.",
+    "A required runtime, capability, or fixture is unavailable: blocked.",
+    "No meaningful checks ran or evidence is stale or ambiguous: inconclusive."
+  ],
+  "retry_limit": 1
+}

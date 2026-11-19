@@ -1,0 +1,4 @@
+SYNTHETIC TUTORIAL INPUT
+Outcome: persist a nonempty account display name.
+Acceptance: reject an empty name without changing saved data.
+Scope: an isolated demonstration workspace; no external effects are authorized.

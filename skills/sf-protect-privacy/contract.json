@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-protect-privacy",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Minimize and govern personal or sensitive data across a feature lifecycle.",
+  "inputs": [
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": true
+    },
+    {
+      "name": "solution-design",
+      "description": "Chosen design, interfaces, alternatives, and decision rationale.",
+      "required": false
+    },
+    {
+      "name": "change-set",
+      "description": "Exact candidate revision, changed behavior, and implementation scope.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "privacy-assessment"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Collection, uses, access, retention, and deletion paths have explicit owners and purposes.",
+    "Open policy or jurisdiction questions are assigned and are not asserted as resolved."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

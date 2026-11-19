@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sfstack:skill-contract:1.0",
+  "title": "sfstack skill-contract",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^sf-[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "stage": {
+      "enum": [
+        "discover",
+        "design",
+        "build",
+        "verify",
+        "deliver",
+        "operate",
+        "improve"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "workspace.read",
+          "workspace.write",
+          "execution.run",
+          "tracker.read",
+          "tracker.write",
+          "review.read",
+          "review.write",
+          "vcs.read",
+          "vcs.write",
+          "release.publish",
+          "deployment.read",
+          "deployment.write",
+          "telemetry.read",
+          "communication.send",
+          "artifact.write"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "workspace.modify",
+          "tracker.modify",
+          "review.publish",
+          "integration.modify",
+          "release.publish",
+          "deployment.modify",
+          "data.modify",
+          "external.communicate"
+        ]
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "completion_checks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "failure_modes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "retry_limit": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "conditional_effects": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "effect",
+          "condition"
+        ],
+        "properties": {
+          "effect": {
+            "enum": [
+              "workspace.modify",
+              "tracker.modify",
+              "review.publish",
+              "integration.modify",
+              "release.publish",
+              "deployment.modify",
+              "data.modify",
+              "external.communicate"
+            ]
+          },
+          "condition": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "version",
+    "stage",
+    "summary",
+    "inputs",
+    "outputs",
+    "capabilities",
+    "effects",
+    "completion_checks",
+    "failure_modes",
+    "retry_limit"
+  ],
+  "additionalProperties": false
+}

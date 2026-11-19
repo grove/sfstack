@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-model-domain",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Define shared domain language, rules, states, and ownership boundaries.",
+  "inputs": [
+    {
+      "name": "outcome-brief",
+      "description": "Actors, desired behavior, business constraints, and examples.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Observed terminology, ownership, persistence, and interaction paths.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "domain-model"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Terms are grounded in scenarios and scoped where meanings differ.",
+    "Rules and state transitions have observable examples.",
+    "Unresolved semantic conflicts are explicit."
+  ],
+  "failure_modes": [
+    "An authoritative business rule is missing: blocked for dependent decisions.",
+    "Conflicting terminology cannot yet be reconciled: inconclusive."
+  ],
+  "retry_limit": 1
+}

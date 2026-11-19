@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "id": "migration",
+  "summary": "Prepare an ordered data-evolution and recovery plan plus a verification plan. This recipe does not mutate live data.",
+  "inputs": [
+    "request",
+    "specification"
+  ],
+  "steps": [
+    {
+      "id": "orient",
+      "skill": "sf-map-project",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "design",
+      "skill": "sf-design-solution",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "specification": "input:specification",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "migration",
+      "skill": "sf-evolve-data",
+      "needs": [
+        "orient",
+        "design"
+      ],
+      "bindings": {
+        "project-context": "step:orient:project-context",
+        "specification": "input:specification",
+        "solution-design": "step:design:solution-design"
+      }
+    },
+    {
+      "id": "tests",
+      "skill": "sf-design-tests",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "specification": "input:specification",
+        "project-context": "step:orient:project-context"
+      }
+    }
+  ],
+  "completion": [
+    "migration",
+    "tests"
+  ]
+}

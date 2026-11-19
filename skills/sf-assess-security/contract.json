@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-assess-security",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Assess changed trust boundaries and verify plausible abuse paths.",
+  "inputs": [
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": true
+    },
+    {
+      "name": "change-set",
+      "description": "Exact candidate revision, changed behavior, and implementation scope.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": false
+    },
+    {
+      "name": "solution-design",
+      "description": "Chosen design, interfaces, alternatives, and decision rationale.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "security-assessment"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Each material finding identifies an attacker, reachable entry point, violated boundary, and impact.",
+    "Static reasoning and executed checks are distinguished; missing evidence is not a clearance."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

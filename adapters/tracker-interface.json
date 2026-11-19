@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "id": "tracker-interface",
+  "kind": "tracker",
+  "capabilities": [
+    "tracker.read",
+    "tracker.write"
+  ],
+  "implementation": "declaration",
+  "operations": [
+    {
+      "name": "read-item",
+      "capability": "tracker.read",
+      "description": "Read canonical identity, native version, mapped status, acceptance and dependencies.",
+      "idempotency": "not-applicable",
+      "concurrency": "read-only",
+      "inputs": [
+        "item-ref"
+      ],
+      "outputs": [
+        "work-item"
+      ]
+    },
+    {
+      "name": "list-items",
+      "capability": "tracker.read",
+      "description": "Page through filtered work; preserve cursors and rate-limit information.",
+      "idempotency": "not-applicable",
+      "concurrency": "read-only",
+      "inputs": [
+        "query"
+      ],
+      "outputs": [
+        "work-items"
+      ]
+    },
+    {
+      "name": "create-item",
+      "capability": "tracker.write",
+      "description": "Create using a stable idempotency key, returning native identity and version.",
+      "idempotency": "required",
+      "concurrency": "compare-and-set",
+      "inputs": [
+        "work-item",
+        "idempotency-key"
+      ],
+      "outputs": [
+        "work-item"
+      ]
+    },
+    {
+      "name": "update-item",
+      "capability": "tracker.write",
+      "description": "Compare native version and update owned fields without overwriting other edits.",
+      "idempotency": "required",
+      "concurrency": "compare-and-set",
+      "inputs": [
+        "work-item",
+        "expected-version",
+        "idempotency-key"
+      ],
+      "outputs": [
+        "work-item"
+      ]
+    },
+    {
+      "name": "transition-item",
+      "capability": "tracker.write",
+      "description": "Map an authorized canonical transition and enforce native workflow rules.",
+      "idempotency": "required",
+      "concurrency": "compare-and-set",
+      "inputs": [
+        "item-ref",
+        "expected-version",
+        "target-state",
+        "idempotency-key"
+      ],
+      "outputs": [
+        "work-item"
+      ]
+    },
+    {
+      "name": "relate-items",
+      "capability": "tracker.write",
+      "description": "Record directed dependencies without assuming labels imply an edge.",
+      "idempotency": "required",
+      "concurrency": "compare-and-set",
+      "inputs": [
+        "item-ref",
+        "dependency-ref",
+        "expected-version",
+        "idempotency-key"
+      ],
+      "outputs": [
+        "work-item"
+      ]
+    }
+  ]
+}

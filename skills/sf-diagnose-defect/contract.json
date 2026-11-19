@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-diagnose-defect",
+  "version": "1.0.0",
+  "stage": "build",
+  "summary": "Establish a defect mechanism through a faithful reproduction and discriminating experiments.",
+  "inputs": [
+    {
+      "name": "request",
+      "description": "Observed symptom, expected behavior, affected scope, and available incident or reproduction evidence.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Relevant execution path, ownership, environment, and verification facilities.",
+      "required": true
+    },
+    {
+      "name": "change-set",
+      "description": "A suspected change or candidate regression boundary.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "diagnosis"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "The reproduction matches the reported symptom or the mismatch is explicit.",
+    "The causal explanation is supported by discriminating observations.",
+    "A bounded repair direction and regression check are identified."
+  ],
+  "failure_modes": [
+    "Required environment or evidence cannot be accessed: blocked.",
+    "The symptom cannot be reproduced or hypotheses remain indistinguishable: inconclusive."
+  ],
+  "retry_limit": 2
+}

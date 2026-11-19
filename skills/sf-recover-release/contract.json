@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-recover-release",
+  "version": "1.0.0",
+  "stage": "operate",
+  "summary": "Restore an acceptable service state using an authorized, data-compatible recovery action.",
+  "inputs": [
+    {
+      "name": "deployment-record",
+      "description": "Observed deployment identity, revision, environment, and phase.",
+      "required": true
+    },
+    {
+      "name": "request",
+      "description": "Requested outcome, scope, constraints, and operating limits.",
+      "required": true
+    },
+    {
+      "name": "release-plan",
+      "description": "Immutable release identity, target, preconditions, rollout, and recovery controls.",
+      "required": false
+    },
+    {
+      "name": "release-observation",
+      "description": "Revision-specific post-deployment evidence and operational verdict.",
+      "required": false
+    },
+    {
+      "name": "incident-record",
+      "description": "Current impact, incident timeline, mitigations, and evidence.",
+      "required": false
+    },
+    {
+      "name": "migration-plan",
+      "description": "Compatibility phases, data invariants, validation, and recovery procedure.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "recovery-record"
+  ],
+  "capabilities": [
+    "deployment.read",
+    "deployment.write",
+    "execution.run",
+    "telemetry.read",
+    "artifact.write"
+  ],
+  "effects": [
+    "deployment.modify"
+  ],
+  "completion_checks": [
+    "The selected recovery is compatible with current data and has explicit authority and stop conditions.",
+    "Service state, revision, data invariants, and remaining impact are observed after the action."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1,
+  "conditional_effects": [
+    {
+      "effect": "data.modify",
+      "condition": "Recovery requires restoring or modifying live data and the host explicitly selects this effect for the invocation."
+    }
+  ]
+}

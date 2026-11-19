@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-explore-behavior",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Explore a running candidate through realistic paths to discover unanticipated defects.",
+  "inputs": [
+    {
+      "name": "change-set",
+      "description": "Exact candidate and changed behavior to explore.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Expected outcomes, constraints, and acceptance criteria.",
+      "required": true
+    },
+    {
+      "name": "test-plan",
+      "description": "Existing checks and known coverage gaps.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "exploration-report"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Exploration charters and actual coverage are recorded.",
+    "Findings distinguish reproducible defects from unresolved observations.",
+    "The report identifies environment limits and untouched risk areas."
+  ],
+  "failure_modes": [
+    "A reproducible behavior violation is observed: failed.",
+    "The required running surface or test identity is unavailable: blocked.",
+    "Exploration evidence cannot establish a useful conclusion: inconclusive."
+  ],
+  "retry_limit": 1
+}

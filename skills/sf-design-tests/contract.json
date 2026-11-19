@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-design-tests",
+  "version": "1.0.0",
+  "stage": "design",
+  "summary": "Design proportionate behavioral checks that can distinguish a correct change from plausible defects.",
+  "inputs": [
+    {
+      "name": "specification",
+      "description": "Requirements, acceptance criteria, failure behavior, and quality constraints.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Available checks, environments, and system boundaries.",
+      "required": false
+    },
+    {
+      "name": "change-set",
+      "description": "The proposed or implemented change and affected surfaces.",
+      "required": false
+    },
+    {
+      "name": "security-assessment",
+      "description": "Current security assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "privacy-assessment",
+      "description": "Current privacy assessment evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "compatibility-report",
+      "description": "Current compatibility report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "accessibility-report",
+      "description": "Current accessibility report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "migration-plan",
+      "description": "Current migration plan evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "performance-report",
+      "description": "Current performance report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    },
+    {
+      "name": "exploration-report",
+      "description": "Current exploration report evidence and its material constraints, when selected by risk or policy.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "test-plan"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Every required criterion has an observable verification method or explicit gap.",
+    "Expected results are independent of the implementation under test.",
+    "Execution conditions, cleanup, and evidence requirements are defined."
+  ],
+  "failure_modes": [
+    "A criterion has no agreed observable meaning: blocked for that criterion.",
+    "The available seams cannot discriminate important failure modes: inconclusive."
+  ],
+  "retry_limit": 1
+}

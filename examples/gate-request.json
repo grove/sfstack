@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "run_id": "tutorial-run",
+  "effect": "integration.modify",
+  "scope": "repository:demo/change:42",
+  "subject": {
+    "revision": "demo-candidate-7b4a",
+    "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+    "environment": "demo-isolated-profile"
+  },
+  "artifacts": [
+    "records/verification-report.json",
+    "records/review-report.json",
+    "records/review-status.json"
+  ]
+}

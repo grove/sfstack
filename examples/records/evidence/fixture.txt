@@ -1,0 +1,3 @@
+SIMULATED FIXTURE ONLY.
+These bytes exercise the offline evidence format; they are not results from a product, coding agent, tracker, deployment, or real test suite.
+Expected scenario: one candidate, one passing check, a separately identified reviewer, and a confirmed review state.

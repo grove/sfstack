@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-prepare-review",
+  "version": "1.0.0",
+  "stage": "deliver",
+  "summary": "Prepare and publish a focused change for review through the available review adapter.",
+  "inputs": [
+    {
+      "name": "change-set",
+      "description": "Exact candidate revision, changed behavior, and implementation scope.",
+      "required": true
+    },
+    {
+      "name": "verification-report",
+      "description": "Checks and evidence bound to the exact candidate and inputs.",
+      "required": true
+    },
+    {
+      "name": "review-report",
+      "description": "Reviewed candidate, findings, dispositions, and unresolved risks.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": false
+    },
+    {
+      "name": "impact-assessment",
+      "description": "Affected consumers, boundaries, operational risks, and verification needs.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "review-package"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "vcs.read",
+    "vcs.write",
+    "review.write",
+    "artifact.write"
+  ],
+  "effects": [
+    "review.publish"
+  ],
+  "completion_checks": [
+    "The published or prepared candidate matches the verified and reviewed revision.",
+    "The review package explains the problem, resulting behavior, evidence, and remaining limits."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

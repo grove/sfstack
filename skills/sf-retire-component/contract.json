@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-retire-component",
+  "version": "1.0.0",
+  "stage": "operate",
+  "summary": "Plan the controlled retirement of a component, interface, environment, or data set.",
+  "inputs": [
+    {
+      "name": "project-context",
+      "description": "Observed system boundaries, dependencies, ownership, and execution paths.",
+      "required": true
+    },
+    {
+      "name": "request",
+      "description": "Requested outcome, scope, constraints, and operating limits.",
+      "required": true
+    },
+    {
+      "name": "impact-assessment",
+      "description": "Affected consumers, boundaries, operational risks, and verification needs.",
+      "required": false
+    },
+    {
+      "name": "specification",
+      "description": "Behavior, acceptance criteria, nonfunctional requirements, and exclusions.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "retirement-plan"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Consumers, obligations, replacement paths, and retirement exit conditions are evidenced.",
+    "Shutdown, retention, restoration, and irreversible deletion are distinct governed steps."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}

@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sfstack:run:1.0",
+  "title": "sfstack run",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "environment": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "revision",
+        "input_digest",
+        "environment"
+      ],
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "workspace.read",
+          "workspace.write",
+          "execution.run",
+          "tracker.read",
+          "tracker.write",
+          "review.read",
+          "review.write",
+          "vcs.read",
+          "vcs.write",
+          "release.publish",
+          "deployment.read",
+          "deployment.write",
+          "telemetry.read",
+          "communication.send",
+          "artifact.write"
+        ]
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "effect_scopes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "propertyNames": {
+        "enum": [
+          "workspace.modify",
+          "tracker.modify",
+          "review.publish",
+          "integration.modify",
+          "release.publish",
+          "deployment.modify",
+          "data.modify",
+          "external.communicate"
+        ]
+      }
+    },
+    "policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      }
+    },
+    "completed": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "minItems": 1,
+        "uniqueItems": true
+      },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      }
+    },
+    "selected_effects": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "enum": [
+            "workspace.modify",
+            "tracker.modify",
+            "review.publish",
+            "integration.modify",
+            "release.publish",
+            "deployment.modify",
+            "data.modify",
+            "external.communicate"
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "subject",
+    "capabilities",
+    "effect_scopes",
+    "policy",
+    "inputs",
+    "completed"
+  ],
+  "additionalProperties": false
+}

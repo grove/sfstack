@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-maintain-review",
+  "version": "1.0.0",
+  "stage": "deliver",
+  "summary": "Bring an open review to a current, actionable state by resolving verified findings and check failures.",
+  "inputs": [
+    {
+      "name": "review-package",
+      "description": "Review identity or publication package with candidate and evidence links.",
+      "required": true
+    },
+    {
+      "name": "verification-report",
+      "description": "Checks and evidence bound to the exact candidate and inputs.",
+      "required": false
+    },
+    {
+      "name": "review-report",
+      "description": "Reviewed candidate, findings, dispositions, and unresolved risks.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "review-status"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "workspace.write",
+    "execution.run",
+    "vcs.read",
+    "vcs.write",
+    "review.read",
+    "review.write",
+    "artifact.write"
+  ],
+  "effects": [
+    "workspace.modify",
+    "review.publish"
+  ],
+  "completion_checks": [
+    "All unresolved findings have explicit dispositions and current checks are identified.",
+    "The report states whether the exact current head is ready, waiting, failed, or blocked without merging."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 3
+}

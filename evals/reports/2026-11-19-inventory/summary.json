@@ -1,0 +1,53 @@
+{
+  "case_id": "inventory-boundary",
+  "date": "2026-11-19",
+  "trial_count": 1,
+  "skills": [
+    "sf-diagnose-defect",
+    "sf-build-change",
+    "sf-verify-change"
+  ],
+  "runtime": "CPython 3.12.14 on Linux; Python standard library",
+  "candidate_revision": "sha256:bb6bc98b814b1eed9d6108405352d84ba906a7ea5bef9c0aef79235db7a4dbcc",
+  "observations": {
+    "baseline_tests_passed": 3,
+    "new_regression_failed_before_fix": true,
+    "final_tests_passed": 6,
+    "final_failures": 0,
+    "final_skips": 0,
+    "diagnosis_probes": 3,
+    "repair_attempts": 1
+  },
+  "packaging": {
+    "initial_status": "failed",
+    "initial_issues": [
+      "Evidence/check IDs used uppercase instead of lowercase kebab-case.",
+      "subject.environment was an object rather than a string."
+    ],
+    "correction": "Bundle the exact artifact schema and explicit validation instructions; preserve original evidence and correct only report packaging.",
+    "corrected_schema_validations": 3,
+    "corrected_evidence_inspections": 3,
+    "remaining_problems": 0
+  },
+  "retained_evidence": [
+    {
+      "path": "change.diff",
+      "sha256": "c76903d355c25af477e07fc271b226bb9ed3bb5793782c823847624947456ff1"
+    },
+    {
+      "path": "green-suite.txt",
+      "sha256": "d37298d2f13f31adf393eecd5254b4bc19c7b15da11fb4f39a5be29a98154285"
+    },
+    {
+      "path": "red-regression.txt",
+      "sha256": "b70d1e61623f7ff0385c66da0e51693276827796daab43387478f7b131349b86"
+    }
+  ],
+  "retention_note": "Runner stdout/stderr retained; machine-specific candidate path replaced with <candidate>. The diff is unchanged. Digests describe the retained bytes. This record summarizes one observed exercise, not a comparative benchmark.",
+  "limitations": [
+    "One small Python case on one agent execution environment.",
+    "No baseline model comparison, confidence interval, or general quality claim.",
+    "No live tracker, publication, deployment or production integration was exercised.",
+    "The initial run did not pass every interface dimension; packaging was corrected after the distribution gap was identified."
+  ]
+}

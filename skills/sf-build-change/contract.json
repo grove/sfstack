@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-build-change",
+  "version": "1.0.0",
+  "stage": "build",
+  "summary": "Implement one bounded work unit with requirement-linked evidence and a reviewable change set.",
+  "inputs": [
+    {
+      "name": "work-plan",
+      "description": "A ready work item, dependencies, ownership, and verification requirements.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Authoritative behavior and acceptance criteria for the item.",
+      "required": true
+    },
+    {
+      "name": "solution-design",
+      "description": "Implementation boundaries and consequential decisions.",
+      "required": false
+    },
+    {
+      "name": "test-plan",
+      "description": "Verification cases and environments.",
+      "required": false
+    },
+    {
+      "name": "diagnosis",
+      "description": "Established cause and reproduction for a defect fix.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "change-set"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "workspace.write",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [
+    "workspace.modify"
+  ],
+  "completion_checks": [
+    "The selected work item is implemented without unrelated changes.",
+    "Behavioral evidence is tied to the resulting candidate.",
+    "Known limitations and verification gaps are disclosed."
+  ],
+  "failure_modes": [
+    "A prerequisite or required execution environment is missing: blocked.",
+    "Observed behavior contradicts acceptance criteria: failed.",
+    "A bounded implementation attempt cannot establish correctness: inconclusive."
+  ],
+  "retry_limit": 2
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "id": "improvement",
+  "summary": "Evaluate a bounded skill-quality claim and turn the observed results into an improvement plan; no automatic policy or skill publication.",
+  "inputs": [
+    "request"
+  ],
+  "steps": [
+    {
+      "id": "evaluate",
+      "skill": "sf-evaluate-skills",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "improve",
+      "skill": "sf-improve-process",
+      "needs": [
+        "evaluate"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "evaluation-report": "step:evaluate:evaluation-report"
+      }
+    }
+  ],
+  "completion": [
+    "improve"
+  ]
+}

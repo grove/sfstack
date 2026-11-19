@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-integrate-change",
+  "version": "1.0.0",
+  "stage": "deliver",
+  "summary": "Integrate an authorized reviewed change into its target using current revision evidence.",
+  "inputs": [
+    {
+      "name": "review-status",
+      "description": "Current review head, base, checks, findings, and readiness decision.",
+      "required": true
+    },
+    {
+      "name": "verification-report",
+      "description": "Checks and evidence bound to the exact candidate and inputs.",
+      "required": true
+    },
+    {
+      "name": "review-report",
+      "description": "Reviewed candidate, findings, dispositions, and unresolved risks.",
+      "required": true
+    },
+    {
+      "name": "impact-assessment",
+      "description": "Affected consumers, boundaries, operational risks, and verification needs.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "integration-record"
+  ],
+  "capabilities": [
+    "vcs.read",
+    "vcs.write",
+    "review.read",
+    "execution.run",
+    "artifact.write"
+  ],
+  "effects": [
+    "integration.modify"
+  ],
+  "completion_checks": [
+    "Authorization, head, base, required checks, and review state are rechecked immediately before integration.",
+    "The actual integrated revision and resulting check state are observed and recorded."
+  ],
+  "failure_modes": [
+    "Missing required inputs, capability, or authority: blocked; retain a concrete next action.",
+    "Contradictory or insufficient evidence: inconclusive; never report an unobserved outcome as passed.",
+    "A demonstrated violation of a required condition: failed; preserve reproducible evidence."
+  ],
+  "retry_limit": 1
+}
