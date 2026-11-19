@@ -405,6 +405,11 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
         actual, _ = file_snapshot(repo, path)
         if any(actual[key] != expected[key] for key in actual):
             raise ValueError("Candidate no longer matches the pinned base file evidence.")
+    preflight = None
+    if target["mode"] == "defect":
+        preflight = defect.reproduce(repo, target, response, output)
+        if preflight["status"] != "passed":
+            return defect.retain_negative(output, preflight)
     candidate, diff = candidate_record(repo, target, response["edits"])
     if candidate["tree_sha"] == target["base_tree_sha"]:
         raise ValueError("Builder produced no change.")
@@ -428,7 +433,11 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
                        "detail": json.dumps(result, sort_keys=True)})
     quality.check_candidate(repo, candidate["head_sha"])
     observed = fixed_time or now()
-    status = report_status({r["status"] for r in results})
+    regression = defect.green(repo, target, candidate, output) if preflight else None
+    defect_record = defect.finalize(output, run, target, response, candidate,
+                                    preflight, regression, observed) if preflight else None
+    status = report_status({r["status"] for r in results} |
+                           ({defect_record["status"]} if defect_record else set()))
     verify_run = {"run_id": run["run_id"] + "-verify", "subject": {"revision": candidate["head_sha"],
                   "input_digest": digest(output / "candidate.json"), "environment": target["environment"]}}
     payload = {"candidate_revision": candidate["head_sha"], "environment": target["environment"],
@@ -443,13 +452,21 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
              quality.evidence(output / "diff.patch", "candidate-diff", "diff"),
              quality.evidence(output / "candidate.json", "candidate-identity", "input"),
              quality.evidence(output / "verification-report.json", "verification-report", "observation"), *evidence]
+    if defect_record:
+        proof.extend([
+            quality.evidence(output / "defect-evidence.json", "defect-evidence", "observation"),
+            quality.evidence(output / "diagnosis.json", "defect-diagnosis", "analysis"),
+            quality.evidence(output / "red.patch", "red-test-diff", "diff"),
+            quality.evidence(output / "logs/red-regression.txt", "red-regression", "test", "logs/red-regression.txt"),
+            quality.evidence(output / "logs/green-regression.txt", "green-regression", "test", "logs/green-regression.txt")])
     change = quality.artifact(run, "change-set", "sf-build-change", status, {
         "work_item": f"issue-{target['issue']['number']}", "criteria_addressed": response["criteria_addressed"],
         "base_revision": target["base_sha"], "candidate_revision": candidate["head_sha"],
         "changed_paths": [e["path"] for e in candidate["edits"]], "behavior_changes": response["behavior_changes"],
         "checks_run": results, "agent_checks_claimed": response["checks_run"], "compatibility_notes": [],
         "documentation_needs": [], "remaining_work": response["remaining_work"],
-        "verification_subject": verify_run["subject"], "acceptance_basis": "Builder claims plus measured host checks; independent quality and human review remain."},
+        "verification_subject": verify_run["subject"], "acceptance_basis": "Builder claims plus measured host checks; independent quality and human review remain.",
+        **({"diagnosis_artifact": "diagnosis.json", "defect_evidence": "defect-evidence.json"} if defect_record else {})},
         proof, [{"id": "host-verification", "status": status, "evidence": ["verification-report"],
                  "detail": "Fresh host reconstructed only scoped files and executed the fixed check plan."}], observed)
     change["summary"] = response["summary"]
@@ -466,15 +483,24 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
             write_json(checkpoint / "run.json", completed)
             if plan(checkpoint / "workflow.json", checkpoint / "run.json", observed)["status"] != "complete":
                 raise ValueError("Completed build does not satisfy its skill handoff.")
+    retained = ["candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json"]
+    if defect_record:
+        retained += ["defect-evidence.json", "diagnosis.json", "red.patch"]
     gate = {"status": status, "passed": status == "passed", "candidate_sha": candidate["head_sha"],
             "subject": verify_run["subject"], "input_digest": run["subject"]["input_digest"],
-            "digests": {name: digest(output / name) for name in ("candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json")},
+            "digests": {name: digest(output / name) for name in retained},
             "mutation_authorized": False, "reasons": [] if status == "passed" else ["Required candidate verification did not pass."]}
     write_json(output / "gate.json", gate)
     lines = ["# sfstack software factory", "", f"**Verdict: {status}**", "",
         f"Issue: {target['issue']['url']}", "", f"Candidate: `{candidate['head_sha']}`", "",
         "| Host check | Status |", "| --- | --- |"]
     lines += [f"| {r['id']} | {r['status']} |" for r in results]
+    if defect_record:
+        lines += ["", "## Defect evidence (fresh host)", "",
+                  f"Base suite: {len(preflight['baseline'])} required checks passed.",
+                  f"RED: {defect_record['red']['tests_run']} tests; real assertion failure on `{preflight['red_head_sha']}`.",
+                  f"GREEN: {defect_record['green']['tests_run']} tests; {defect_record['green']['status']} on `{candidate['head_sha']}`.",
+                  "See red.patch, diagnosis.json, defect-evidence.json and logs for the exact commands and outputs."]
     lines += ["", "The build preserves the original issue, acceptance criteria, base, scoped edits, agent claims, and actual host logs.",
               "A passing build may be published as a draft. The separate Quality Factory and human review remain required; no merge is authorized."]
     (output / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
