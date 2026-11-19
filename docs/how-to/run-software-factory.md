@@ -178,6 +178,21 @@ step and repository PR-creation permission. If a draft exists but quality
 dispatch failed, run **sfstack GitHub quality** manually for that PR from the
 current default branch, using the [quality retry instructions](run-github.md#run-or-retry-manually).
 
+## Troubleshoot the first live run
+
+Use this table to recognize common problems. None of the recoveries widens the
+permitted files, skips verification, bypasses the Quality Factory, or approves
+or merges anything. Never paste a token value into an issue, input, log, or PR.
+
+| Symptom | Likely cause | Safe recovery action |
+| --- | --- | --- |
+| The build job fails at agent start with an authentication or missing-secret error, or Copilot calls are rejected. | `COPILOT_GITHUB_TOKEN` is missing, expired, revoked, or lacks Copilot access. | Check that the repository secret exists and is valid without displaying it. Replace it through repository secret settings as described in the [quality integration](run-github.md#install-and-enable), then use **Re-run all jobs** if the issue, base, and scope are unchanged. |
+| The run is rejected during admission and names `allowed-paths` or `acceptance-criteria`. | An input is not valid JSON, is not an array, or has too many items. A path is a glob, a directory, hidden, outside `docs/`, `examples/`, `tests/`, or the root `README.md`, or is a workflow or control-plane file. A criterion is empty or too long. | Dispatch a new run with `allowed-paths` as a JSON array of at most eight exact file paths and `acceptance-criteria` as a JSON array of one to eight concise strings. See [Select a small issue and run it](#select-a-small-issue-and-run-it). Work outside the supported scope needs a new work item. |
+| The run reports a stale or changed base, issue, or inputs, or publication refuses to continue. | `main` advanced or the issue was edited after the run pinned its snapshot. | Do not retry the old run. Review the current issue and dispatch a new run from the current default branch. Use **Re-run all jobs** only when the issue, base, and scope are unchanged, as described in [Retry or recover](#retry-or-recover). |
+| Verification passes but no draft PR appears, and the publication step reports a permission error creating a pull request. | **Allow GitHub Actions to create and approve pull requests** is disabled for the repository, or an organization policy prevents it. | A repository administrator can enable the setting in **Settings → Actions → General → Workflow permissions**, subject to organization policy; it applies to workflows in this repository. The workflow creates only drafts and never approves or merges. Inspect existing drafts, then re-run the same attempt if the inputs are unchanged or dispatch a new run. See [Enable the integration](#enable-the-integration). |
+| A draft exists but there is no `sfstack quality` result. | The explicit quality dispatch failed. | Run **sfstack GitHub quality** for that PR using the [quality retry instructions](run-github.md#run-or-retry-manually). |
+| Verification fails. | The proposed files violate the checks or criteria. | Inspect the retained logs. No draft is published; fix the issue or inputs and dispatch a new run. |
+
 ## Complete the first live acceptance test
 
 After merge, use one small sfstack issue as the first live implementation run.
