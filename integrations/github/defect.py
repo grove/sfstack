@@ -204,6 +204,9 @@ def validate_evidence(repo, target, candidate, response, output, run, at, max_ag
         raise ValueError("The same regression was not RED then GREEN.")
     expected_logs = {"baseline-" + c["id"] + ".txt" for c in target["checks"]}
     expected_logs.update({"red-regression.txt", "green-regression.txt"})
+    # The GREEN candidate's whole-host-suite logs are part of the retained proof,
+    # not extras that should invalidate a successful run.
+    expected_logs.update({c["id"] + ".txt" for c in target["checks"]})
     if (set(record.get("logs", {})) != expected_logs
             or any(quality.digest(output / "logs" / name) != record["logs"][name]
                    for name in expected_logs)):
