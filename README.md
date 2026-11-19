@@ -40,6 +40,9 @@ No need to read the whole library first. Pick the path that matches your goal:
 - **I want to assess a GitHub pull request.** Follow the
   [GitHub integration guide](docs/how-to/run-github.md) for Actions,
   Agentic Workflows, and quality gates.
+- **I want to build a change from a GitHub issue.** Follow the
+  [Software Factory guide](docs/how-to/run-software-factory.md) to implement
+  one scoped work item, verify it, and open a draft PR for review.
 
 ### Try the local demo
 
@@ -84,6 +87,8 @@ initialization if you also need security and compatibility assessments.
 - **Learn the workflows:** try the [factory rehearsal](docs/tutorials/factory-rehearsal.md),
   [Quality Factory rehearsal](docs/tutorials/quality-rehearsal.md), or
   [local adapter slice](docs/tutorials/local-slice.md).
+- **Build from an issue:** see the [Software Factory integration](docs/how-to/run-software-factory.md)
+  for a maintainer-scoped GitHub workflow.
 - **Choose and connect tools:** read [skill and workflow selection](docs/how-to/select-skills.md),
   [agent integration](docs/how-to/connect-agent.md), and
   [tracker integration](docs/how-to/connect-tracker.md).
@@ -107,7 +112,7 @@ explanation using [Diátaxis](https://diataxis.fr/).
 | Workflows | JSON recipes in `workflows/` | Named dependency graphs with explicit artifact bindings. |
 | Schemas and examples | `schemas/`, `examples/` | Validate interchange records and demonstrate integration boundaries. |
 | Adapter contracts | `adapters/` | Separate neutral skill behavior from environment-specific tool calls. |
-| GitHub integration | [Actions and Agentic Workflows](docs/how-to/run-github.md) | Assess a pinned PR through real verification, the review skill, and deterministic quality/effect gates. |
+| GitHub integration | [Quality Factory](docs/how-to/run-github.md) and [Software Factory](docs/how-to/run-software-factory.md) | Build a scoped issue into a draft PR, then assess the pinned candidate through real verification, review, and deterministic quality/effect gates. |
 | Reference tools | `tools/` and `tests/` | Validate the library, inspect readiness, assess gates, and export skills. |
 | Behavioral evaluation | [Seed case and rubric](evals/README.md) | Exercise skills on an isolated coding task and report evidence and limits. |
 
@@ -117,8 +122,9 @@ results, and save a checkpoint after each step. A
 [reference unittest adapter](examples/adapters/README.md) executes real checks
 on pinned candidates. These tools supply no sandbox or production tool boundary.
 The optional GitHub integration connects Copilot through Agentic Workflows for
-automated review. It uses a manually dispatched Actions gate and grants no merge
-authority; independent human approval remains separate. The library does not
+automatic review of same-repository PRs and publishes an evidence-backed quality
+check on the reviewed commit. Manual dispatch remains available. The integration
+grants no merge authority; independent human approval remains separate. The library does not
 supply a tracker, merge queue, or deployment service. A production controller must provide persistence,
 authentication, isolation, scheduling, and enforcement at the actual tool
 boundary. See [factory architecture](docs/explanation/factory-design.md).
