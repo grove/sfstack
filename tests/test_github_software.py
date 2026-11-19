@@ -303,6 +303,28 @@ class GitHubSoftwareTests(SoftwareFixture):
         with self.assertRaises(ValueError):
             self.verify()
 
+    def test_live_gh_aw_output_id_is_allowed_but_unrecognized_metadata_fails_closed(self):
+        self.prepare()
+        response = self.response()
+        envelope = load_json(self.submission)
+        envelope["items"][0]["output_id"] = "so_qPWeylbZTcqh"
+        self.write(self.submission, envelope)
+        result = self.verify()
+        self.assertTrue(result["passed"])
+        self.assertEqual(self.base, load_json(self.result / "candidate.json")["base_sha"])
+        # The host retains the original transport bytes, including output_id.
+        self.assertEqual(envelope, load_json(self.result / "submission.json"))
+        for metadata in ({"output_id": 3}, {"output_id": "not-a-safe-output-id"},
+                         {"output_id": "so_" + "x" * 200}, {"untrusted_override": True}):
+            with self.subTest(metadata=metadata):
+                self.submit(response)
+                wrapper = load_json(self.submission)
+                wrapper["items"][0].update(metadata)
+                self.write(self.submission, wrapper)
+                with self.assertRaises(ValueError):
+                    software.load_response(self.submission, load_json(self.bundle / "run.json"),
+                                           load_json(self.bundle / "target.json"))
+
     def test_multiple_submissions_are_not_silently_selected(self):
         self.prepare()
         self.response()
