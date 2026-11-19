@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sfstack:payload:review-report:1.0",
+  "title": "Core review-report payload (additional skill-specific fields permitted)",
+  "type": "object",
+  "required": [
+    "findings"
+  ],
+  "properties": {
+    "candidate_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "change_author": {
+      "type": "string",
+      "minLength": 1
+    },
+    "independence_basis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "blocking",
+          "disposition"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "blocking": {
+            "type": "boolean"
+          },
+          "disposition": {
+            "enum": [
+              "open",
+              "resolved",
+              "rejected",
+              "accepted-risk"
+            ]
+          },
+          "severity": {
+            "type": "string"
+          },
+          "waiver": {
+            "type": "object",
+            "properties": {
+              "actor": {
+                "type": "string",
+                "minLength": 1
+              },
+              "decision": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "actor",
+              "decision",
+              "evidence"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

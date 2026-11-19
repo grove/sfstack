@@ -173,6 +173,17 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None):
     artifact = load_json(path)
     validate_schema(artifact, "artifact")
     problems = []
+    # Validate claim-bearing fields as well as the generic artifact envelope.
+    # Keep malformed payloads as gate-blocking evidence problems, not exceptions.
+    payload_schema = {
+        "verification-report": "payload-verification-report",
+        "review-report": "payload-review-report",
+    }.get(artifact["artifact_type"])
+    if payload_schema:
+        try:
+            validate_schema(artifact["payload"], payload_schema)
+        except ValueError as exc:
+            problems.append(f"{artifact['artifact_id']}: invalid {payload_schema}: {exc}")
     prefix = artifact["artifact_id"]
     if artifact["subject"] != subject:
         problems.append(f"{prefix}: stale subject (revision, inputs, or environment changed).")

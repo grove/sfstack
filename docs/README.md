@@ -8,6 +8,7 @@ precise information, and understanding the design are different activities.
 
 - [Run your first skill](tutorials/first-skill.md): clarify an outcome and inspect an evidence-bearing result.
 - [Rehearse a factory workflow](tutorials/factory-rehearsal.md): validate the examples, inspect readiness, and examine a gate without live side effects.
+- [Run a local adapter slice](tutorials/local-slice.md): dispatch one effect-free skill and inspect the validated handoff.
 
 ## How-to guides — accomplish a particular task
 
@@ -17,6 +18,8 @@ precise information, and understanding the design are different activities.
 - [Operate a factory controller](how-to/run-factory.md).
 - [Add or change a skill](how-to/add-skill.md).
 - [Evaluate skill quality](how-to/evaluate-quality.md).
+- [Plan evidence revalidation](how-to/revalidate-evidence.md).
+- [Compare paired agent trials](how-to/compare-trials.md).
 
 ## Reference — look up the contract
 
