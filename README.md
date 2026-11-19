@@ -25,6 +25,7 @@ visible; a successful-looking response is not a substitute for a verified result
 
 - **Start a local quality run:** [Initialize, inspect, and resume](docs/how-to/run-local.md) with one CLI.
 - **Assess a GitHub PR:** [Run Actions and Agentic Workflows](docs/how-to/run-github.md) with deterministic verification, Copilot review, retained evidence, and a quality gate.
+- **Build from a GitHub issue:** [Run Software Factory](docs/how-to/run-software-factory.md) to implement one scoped work item, verify it, and open a draft PR for Quality Factory and human review.
 - **See real test evidence:** [Execute the quality regression](evals/README.md#execute-the-quality-handoff-with-real-tests).
 - **Try one skill:** [Create an outcome brief with your agent](docs/tutorials/first-skill.md).
 - **Try a factory workflow:** [Rehearse an offline factory run](docs/tutorials/factory-rehearsal.md).
@@ -78,7 +79,7 @@ compatibility. A trusted adapter supplies the actual work; the
 | Workflows | JSON recipes in `workflows/` | Named dependency graphs with explicit artifact bindings. |
 | Schemas and examples | `schemas/`, `examples/` | Validate interchange records and demonstrate integration boundaries. |
 | Adapter contracts | `adapters/` | Separate neutral skill behavior from environment-specific tool calls. |
-| GitHub integration | [Actions and Agentic Workflows](docs/how-to/run-github.md) | Assess a pinned PR through real verification, the review skill, and deterministic quality/effect gates. |
+| GitHub integration | [Quality Factory](docs/how-to/run-github.md) and [Software Factory](docs/how-to/run-software-factory.md) | Build a scoped issue into a draft PR, then assess the pinned candidate through real verification, review, and deterministic quality/effect gates. |
 | Reference tools | `tools/` and `tests/` | Validate the library, inspect readiness, assess gates, and export skills. |
 | Behavioral evaluation | [Seed case and rubric](evals/README.md) | Exercise skills on an isolated coding task and report evidence and limits. |
 

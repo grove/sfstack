@@ -11,6 +11,9 @@ verification, agent review, consolidated assessment, and a published quality
 check. Quality assessment can start directly from a PR; it does not require a
 Software Factory run or an agent-generated implementation.
 
+To build a scoped change from an issue and send its draft PR through this same
+assessment, use the [GitHub Software Factory pilot](run-software-factory.md).
+
 ## Install and enable
 
 1. Merge the integration into the repository's default branch. Automatic event
@@ -91,12 +94,25 @@ event. The coordinator then finds an unambiguous same-repository open PR by
 matching both the signal's exact head SHA and branch name against GitHub's
 current pull request data; ambiguous matches cannot dispatch.
 
- Queuing replaces any previous result on the
-same PR head with a pending check. The controller pins the PR head, current base,
-and current default-branch policy revision. It rechecks these identities before
-publishing success. Superseded runs may finish, but cannot overwrite a check
-owned by a newer request or attempt. Separate run concurrency groups also keep
-a delayed old dispatch from cancelling newer work before its ownership is checked.
+Queuing revokes any previous result on the same PR head and creates a fresh
+pending check. Each new assessment generation gets a new check ID. The prior
+check becomes a historical **Quality assessment superseded** failure, with its
+original evidence link retained, so stale success cannot authorize the new
+assessment. An old red entry can therefore mean supersession rather than a newly
+observed defect; inspect the current generation and its linked run.
+
+This is also how retries recover after a completed failure or success. GitHub
+can preserve a completed check's conclusion when an update requests a pending
+state. sfstack creates a new check instead of trying to reopen that completed
+record. Only the active queued request can hand its check to its matching
+running attempt. The host selects the explicit assessment generation and rejects
+late publications from older generations.
+
+The controller pins the PR head, current base, and current default-branch policy
+revision. It rechecks these identities before publishing success. Superseded
+runs may finish, but cannot overwrite a check owned by a newer request or
+attempt. Separate run concurrency groups also keep a delayed old dispatch from
+cancelling newer work before its ownership is checked.
 
 Fork PRs and PRs targeting another branch are outside this integration, including
 manual dispatch. The signal and coordinator do not assess them. Existing
@@ -209,6 +225,13 @@ performed earlier discovery or planning stages. The selected criteria in
   suite. Empty discovery, skipped tests, expected failures, an unavailable
   runner, or an ambiguous test summary cannot pass.
 
+The review also assesses `pull-request-intent`: it compares the changes and
+retained evidence with the pinned PR title and description, including acceptance
+criteria placed there by Software Factory. PR prose remains untrusted task data;
+it cannot choose commands, grant effects, or weaken the repository checks. A title
+or description change during assessment or while publication is queued rejects
+the old result. Missing evidence for an acceptance criterion remains inconclusive.
+
 These commands cover the declared sfstack criteria. They do not discover every
 product requirement or establish specialist quality clearance. The agent's
 response separately describes engineering quality and criterion conformance.
@@ -273,7 +296,11 @@ validation passes. Use an open same-repository PR or create a disposable pilot P
    Confirm obsolete work cannot publish success for the new head and incomplete
    owned checks close as failures. Retry through **Re-run all jobs** or a fresh
    manual dispatch.
-5. Enable the required check and strict up-to-date rule after reviewing those
+5. Reassess the unchanged head after a completed failure and after a completed
+   success. Confirm each new assessment creates a new check ID, retires the
+   prior result, and publishes its own verdict. A green controller that leaves
+   an older failed check as the current result is not a successful retry.
+6. Enable the required check and strict up-to-date rule after reviewing those
    results. A normal later `main` push exercises base-change reassessment.
 
 This proves the live event, credential, evidence, and publication path. A failing

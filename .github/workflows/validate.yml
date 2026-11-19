@@ -56,6 +56,17 @@ jobs:
           retention-days: 14
       - name: Verify all standalone exports
         run: python tools/export_skills.py --output dist/skills
+      - name: Exercise bounded software builds with unfixed and fixed candidates
+        if: matrix.python-version == '3.11'
+        run: python evals/run_software_regression.py --output dist/software-regression
+      - name: Upload Software Factory regression evidence
+        if: always() && matrix.python-version == '3.11'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: software-regression
+          path: dist/software-regression
+          if-no-files-found: error
+          retention-days: 14
 
   agentic_workflows:
     name: Validate Agentic Workflows compilation
@@ -95,7 +106,8 @@ jobs:
             "$GH_AW_COMPILER_URL" --output "$RUNNER_TEMP/gh-aw"
           printf '%s  %s\n' "$GH_AW_COMPILER_SHA" "$RUNNER_TEMP/gh-aw" | sha256sum --check -
           chmod +x "$RUNNER_TEMP/gh-aw"
-      - name: Compile the authored workflow and detect drift
+      - name: Compile the authored workflows and detect drift
         run: |
           "$RUNNER_TEMP/gh-aw" compile sfstack-review --strict --no-check-update --no-logo
-          git diff --exit-code -- .github/workflows/sfstack-review.lock.yml .github/aw/actions-lock.json
+          "$RUNNER_TEMP/gh-aw" compile sfstack-build --strict --no-check-update --no-logo
+          git diff --exit-code -- .github/workflows/sfstack-review.lock.yml .github/workflows/sfstack-build.lock.yml .github/aw/actions-lock.json

@@ -108,8 +108,8 @@ class GitHubAPI:
         return self.request("PATCH", path, body)
 
 
-def owner(pr, base, kind, identifier, attempt, request_id):
-    return {"v": 2, "p": pr, "b": base, "k": kind, "i": identifier,
+def owner(pr, base, kind, identifier, attempt, request_id, generation=1):
+    return {"v": 3, "g": generation, "p": pr, "b": base, "k": kind, "i": identifier,
             "a": attempt, "q": request_id or "manual"}
 
 
@@ -122,7 +122,9 @@ def check_owner(check):
         return None
     try:
         value = strict_json(check.get("external_id", ""))
-        if (set(value) != {"v", "p", "b", "k", "i", "a", "q"} or value["v"] != 2
+        fields = {"v", "p", "b", "k", "i", "a", "q"}
+        if (not isinstance(value, dict) or not ((value.get("v") == 2 and set(value) == fields)
+                 or (value.get("v") == 3 and set(value) == fields | {"g"} and positive(value["g"])))
                 or not all(positive(value[key]) for key in ("p", "i", "a"))
                 or value["k"] not in {"request", "run"} or not SHA.fullmatch(value["b"])
                 or not (value["q"] == "manual" or REQUEST_ID.fullmatch(value["q"]))):
@@ -227,9 +229,15 @@ class Host:
         matches = [check for check in checks
                    if (check_owner(check) or {}).get("p") == pr["number"]
                    and check.get("head_sha") == pr["head"]["sha"]]
-        if len(matches) > 1:
-            raise ValueError("Multiple owned checks exist for the same PR head; refusing an ambiguous update.")
-        return matches[0] if matches else None
+        if not matches:
+            return None
+        # GitHub's `latest` filter uses completed_at, not our assessment order.
+        # Keep historical checks and select the explicit host-owned generation.
+        # Existing v2 checks precede the first v3 generation.
+        generations = [check_owner(check).get("g", 0) for check in matches]
+        if len(generations) != len(set(generations)):
+            raise ValueError("Multiple owned checks claim one generation; refusing an ambiguous update.")
+        return max(matches, key=lambda check: check_owner(check).get("g", 0))
 
     def update_check(self, pr, check, identity, status, title, summary, conclusion=None, details_url=None):
         body = {"name": CHECK_NAME, "external_id": owner_text(identity), "status": status,
@@ -240,8 +248,29 @@ class Host:
             body["completed_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         if check is None:
             body["head_sha"] = pr["head"]["sha"]
-            return self.api.post(self.path("check-runs"), body)
-        return self.api.patch(self.path(f"check-runs/{check['id']}"), body)
+            updated = self.api.post(self.path("check-runs"), body)
+        else:
+            updated = self.api.patch(self.path(f"check-runs/{check['id']}"), body)
+        if (updated.get("status") != status or check_owner(updated) != identity
+                or (conclusion and updated.get("conclusion") != conclusion)):
+            raise ValueError("GitHub did not accept the requested check state.")
+        return updated
+
+    def replace_check(self, pr, previous, identity, status, title, summary, conclusion=None, details_url=None):
+        """Invalidate old clearance before creating a fresh assessment check.
+
+        PATCHing a completed check to in_progress can retain its conclusion and
+        completed status. A new generation must use POST instead. Retire the old
+        result first so even an interrupted creation cannot leave stale success
+        available to GitHub's latest-completion selection. Old publishers are
+        fenced by generation and never update this historical completion again.
+        """
+        if previous is not None:
+            self.update_check(pr, previous, check_owner(previous), "completed", "Quality assessment superseded",
+                              "A newer assessment requires fresh evidence. This result no longer grants quality clearance.\n\n"
+                              + previous.get("output", {}).get("summary", "")[:60000], "failure",
+                              previous.get("details_url"))
+        return self.update_check(pr, None, identity, status, title, summary, conclusion, details_url)
 
     def dispatch(self, event):
         repository, _ = self.trusted_context(EVENTS, {"workflow_run", "push"})
@@ -298,8 +327,9 @@ class Host:
             previous = check_owner(check) if check else None
             if previous and previous["b"] == tip and (previous["i"], previous["a"]) >= (self.run_id, self.attempt):
                 continue
-            identity = owner(number, tip, "request", self.run_id, self.attempt, request_id)
-            check = self.update_check(pr, check, identity, "queued", "Quality assessment queued",
+            identity = owner(number, tip, "request", self.run_id, self.attempt, request_id,
+                             (previous or {}).get("g", 0) + 1)
+            check = self.replace_check(pr, check, identity, "queued", "Quality assessment queued",
                                       f"PR #{number} at `{pr['head']['sha']}` will be assessed against base `{tip}`.\n\n"
                                       "The previous result cannot approve this request.")
             try:
@@ -336,8 +366,16 @@ class Host:
             return {"eligible": False, "reason": "This dispatch no longer owns the queued request."}
         if previous and (previous["i"], previous["a"]) > (self.run_id, self.attempt):
             return {"eligible": False, "reason": "A newer assessment owns the check."}
-        identity = owner(pr["number"], tip, "run", self.run_id, self.attempt, request_id)
-        check = self.update_check(pr, check, identity, "in_progress", "Assessing the pinned PR head",
+        same_attempt = (previous and previous["k"] == "run" and previous["i"] == self.run_id
+                        and previous["a"] == self.attempt)
+        if same_attempt and check.get("status") == "completed":
+            return {"eligible": False, "reason": "This attempt is completed; re-run all jobs or dispatch a fresh assessment."}
+        handoff = previous and previous["k"] == "request" and previous["q"] == request_id
+        reuse = (same_attempt or handoff) and check.get("status") in {"queued", "in_progress"} and previous.get("v") == 3
+        generation = (previous or {}).get("g", 0) + (0 if reuse else 1)
+        identity = owner(pr["number"], tip, "run", self.run_id, self.attempt, request_id, generation)
+        writer = self.update_check if reuse else self.replace_check
+        check = writer(pr, check, identity, "in_progress", "Assessing the pinned PR head",
                                   f"Candidate `{pr['head']['sha']}`; base `{tip}`; attempt {self.attempt}.\n\n"
                                   "Verification, agent review, and the deterministic quality gate must all complete.")
         publication = {"version": 2, "repository": self.repository, "pull_request": pr["number"],
@@ -428,9 +466,14 @@ class Host:
                 or identity["a"] != self.attempt or identity["p"] != publication["pull_request"]
                 or identity["b"] != publication["base_sha"] or check.get("head_sha") != publication["head_sha"]):
             return {"published": False, "reason": "A newer request or attempt owns the check."}
+        stub = {"number": publication["pull_request"], "head": {"sha": publication["head_sha"]}}
+        current = self.find_check(stub)
+        if current is None or current["id"] != check["id"]:
+            return {"published": False, "reason": "A newer assessment generation owns publication."}
         # Repeated delivery cannot change a completed result for the same attempt.
         if check.get("status") == "completed":
-            return {"published": False, "reason": "This attempt has already published its result."}
+            return {"published": False, "conclusion": check.get("conclusion"),
+                    "reason": "This attempt has already published its result."}
         conclusion, reason, artifact = "failure", "The trusted quality gate did not succeed.", None
         try:
             if gate_result != "success":
@@ -440,6 +483,10 @@ class Host:
                     or self.default_sha(repository["default_branch"]) != publication["controller_sha"]
                     or publication["base_sha"] != publication["controller_sha"]):
                 raise ValueError("The PR head, base, or controller policy advanced before publication.")
+            target, _ = read_json(Path(result_dir) / "target.json", Path(result_dir))
+            if ("pull_request_context" in target and target["pull_request_context"] != {
+                    "title": pr.get("title") or "", "body": pr.get("body") or ""}):
+                raise ValueError("PR title or acceptance description changed before publication.")
             artifact = self.validate_result(publication, result_dir)
             conclusion, reason = "success", "Both required reports passed and the trusted sfstack quality gate accepted their evidence."
         except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -458,7 +505,6 @@ class Host:
         if artifact:
             summary += f"\n\n[Download the complete evidence bundle]({run_url}/artifacts/{artifact['id']})."
         summary += "\n\nAutomated quality evidence does not grant mutation permission or independent human approval."
-        stub = {"number": publication["pull_request"], "head": {"sha": publication["head_sha"]}}
         self.update_check(stub, check, identity, "completed", "Quality passed" if conclusion == "success" else "Quality blocked",
                           summary, conclusion, run_url)
         return {"published": True, "conclusion": conclusion, "reason": reason, "check_id": check["id"]}
@@ -481,15 +527,19 @@ class Host:
             return {"published": False, "reason": "A different request or run owns the check."}
         if same_run and identity["a"] == run["run_attempt"] and check.get("status") == "completed":
             return {"published": False, "reason": "The current attempt already published its result."}
-        updated = owner(pr["number"], identity["b"], "run", run["id"], run["run_attempt"], title[2])
+        reuse = ((queued_request or (same_run and identity["a"] == run["run_attempt"]))
+                 and check.get("status") in {"queued", "in_progress"} and identity.get("v") == 3)
+        updated = owner(pr["number"], identity["b"], "run", run["id"], run["run_attempt"], title[2],
+                        identity.get("g", 0) + (0 if reuse else 1))
+        writer = self.update_check if reuse else self.replace_check
         url = f"https://github.com/{self.repository}/actions/runs/{run['id']}"
         if in_progress:
             if same_run and identity["a"] == run["run_attempt"]:
                 return {"published": False, "reason": "The current attempt already owns a pending check."}
-            self.update_check(pr, check, updated, "in_progress", "Quality assessment running",
+            check = writer(pr, check, updated, "in_progress", "Quality assessment running",
                               "This run attempt must produce fresh evidence before quality can pass.", details_url=url)
         else:
-            self.update_check(pr, check, updated, "completed", "Quality assessment incomplete",
+            check = writer(pr, check, updated, "completed", "Quality assessment incomplete",
                               reason + "\n\nRe-run all jobs or dispatch a fresh assessment from the default branch.",
                               "failure", url)
         return {"published": True, "conclusion": "pending" if in_progress else "failure", "check_id": check["id"]}
