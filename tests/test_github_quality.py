@@ -416,6 +416,19 @@ class GitHubWorkflowBoundaryTests(unittest.TestCase):
         for job in coordinator.values():
             self.assertNotIn("download-artifact", job)
 
+    def test_agentic_review_allows_only_trusted_dispatch_bot_and_human_roles(self):
+        # The trusted controller's workflow_dispatch is performed by
+        # github-actions[bot], not a human repository collaborator.
+        # gh-aw pre_activation must permit that actor without roles: all.
+        authored = (ROOT / ".github/workflows/sfstack-review.md").read_text()
+        compiled = (ROOT / ".github/workflows/sfstack-review.lock.yml").read_text()
+        self.assertIn('  bots: ["github-actions[bot]"]', authored)
+        self.assertNotIn("  roles: all", authored)
+        self.assertIn('GH_AW_ALLOWED_BOTS: "github-actions[bot]"', compiled)
+        self.assertIn('GH_AW_REQUIRED_ROLES: "admin,maintainer,write"', compiled)
+        self.assertEqual(1, compiled.count("GH_AW_ALLOWED_BOTS:"))
+        self.assertNotIn("GH_AW_ALLOWED_BOTS: \"dependabot", compiled)
+
     def test_pr_signal_has_no_credentials_or_candidate_execution(self):
         source = (ROOT / ".github/workflows/sfstack-pr-signal.yml").read_text()
         self.assertIn("permissions: {}", source)

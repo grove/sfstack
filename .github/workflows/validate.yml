@@ -99,14 +99,3 @@ jobs:
         run: |
           "$RUNNER_TEMP/gh-aw" compile sfstack-review --strict --no-check-update --no-logo
           git diff --exit-code -- .github/workflows/sfstack-review.lock.yml .github/aw/actions-lock.json
-      # Temporary: export the compiler-generated lock for the admission hotfix.
-      - name: Export compiled lock for review
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: gh-aw-compiled-admission
-          path: |
-            .github/workflows/sfstack-review.lock.yml
-            .github/aw/actions-lock.json
-          if-no-files-found: error
-          retention-days: 1

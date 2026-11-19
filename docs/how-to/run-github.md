@@ -40,6 +40,15 @@ verification has a read-only repository token and no Copilot secret. Check
 publication and event routing use separate jobs with narrowly declared write
 permissions.
 
+The default-branch controller uses the Actions token to dispatch runs, so the
+reusable Agentic Workflow sees `github-actions[bot]` as its triggering actor.
+The review workflow explicitly allowlists **only this bot** through
+`on.bots: ["github-actions[bot]"]`, while retaining the normal
+`admin,maintainer,write` role checks for human actors. GitHub's installed-bot
+check still applies. This activation rule grants no additional GitHub API
+permissions or write capabilities to the agent. Do not replace it with
+`roles: all` to circumvent authorization checks.
+
 The default branch is currently `main`. If it is renamed, update the `push`
 branch filter in
 [sfstack-quality-events.yml](../../.github/workflows/sfstack-quality-events.yml)
@@ -245,7 +254,11 @@ not grant the assessed change permission to merge, modify source, or deploy.
 ## Validate after merging
 
 The new automatic path becomes active only after these workflows reach the
-default branch. Use an open same-repository PR or create a disposable pilot PR:
+default branch. In particular, a PR editing the review workflow cannot activate
+its own changed bot admission policy: the current default-branch compiled
+review is still used until the fix is merged. Its pre-merge automated
+`sfstack quality` check may therefore remain failed even while ordinary
+validation passes. Use an open same-repository PR or create a disposable pilot PR:
 
 1. Push a small acceptable change and observe **sfstack PR signal**, the
    coordinator, and the dispatched controller. Verify that `sfstack quality`
