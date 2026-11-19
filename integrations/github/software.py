@@ -31,7 +31,7 @@ from factory import plan
 from jsonschema import Draft202012Validator
 from quality_report import report_status
 from render_invocation import render as render_skill
-from integrations.github import automation, quality
+from integrations.github import automation, quality, defect
 
 HERE = Path(__file__).resolve().parent
 WORKFLOW = "sfstack-software.yml"
@@ -131,7 +131,8 @@ def file_snapshot(repo, path):
 
 
 def prepare(repo, issue, repository, run_id, run_attempt, allowed_paths, acceptance_criteria,
-            output, at=None, checks=None, actor="maintainer", base_branch="main"):
+            output, at=None, checks=None, actor="maintainer", base_branch="main",
+            mode="change", regression_file=None):
     at = (at or now()).replace(microsecond=0)
     repo, output = Path(repo).resolve(), Path(output).resolve()
     if (not quality.REPOSITORY.fullmatch(repository)
@@ -152,12 +153,14 @@ def prepare(repo, issue, repository, run_id, run_attempt, allowed_paths, accepta
         files[path] = {**info, "original": f"original/{index}.txt" if raw is not None else None}
         if raw is not None:
             originals[files[path]["original"]] = raw
+    mode_config = defect.configuration(mode, regression_file, selected, files)
     target = {"repository": repository, "issue": snapshot, "base_sha": base,
               "base_tree_sha": git(repo, "rev-parse", "HEAD^{tree}").decode().strip(),
               "base_branch": base_branch, "actor": actor, "run_id": str(run_id),
               "run_attempt": str(run_attempt), "allowed_files": files, "criteria": acceptance,
               "checks": checks, "created_at": at.isoformat().replace("+00:00", "Z"),
-              "environment": f"github-actions-python-{sys.version_info.major}.{sys.version_info.minor}"}
+              "environment": f"github-actions-python-{sys.version_info.major}.{sys.version_info.minor}",
+              **mode_config}
     output.mkdir(parents=True)
     for path, raw in originals.items():
         destination = output / path
@@ -209,6 +212,10 @@ def load_bundle(bundle, at):
             or load_json(bundle / "workflow.json") != load_json(HERE / "software-workflow.json")):
         raise ValueError("Software inputs changed, expired, or belong to another subject.")
     allowed_files(list(target["allowed_files"]))
+    if defect.configuration(target.get("mode"), target.get("regression_file"),
+                            list(target["allowed_files"]), target["allowed_files"]) != {
+                                "mode": target["mode"], "regression_file": target["regression_file"]}:
+        raise ValueError("Invalid pinned defect repair configuration.")
     if target["criteria"] != criteria([c["description"] for c in target["criteria"]]):
         raise ValueError("Invalid acceptance criteria identities.")
     quality.check_plan(target["checks"])
@@ -233,6 +240,10 @@ def render(bundle, candidate, output, at=None):
     template = {"run_id": run["run_id"], "subject": run["subject"], "status": "inconclusive",
         "summary": "Replace with the supported build outcome.", "criteria_addressed": [],
         "behavior_changes": [], "checks_run": [], "remaining_work": [], "edits": []}
+    if target["mode"] == "defect":
+        template["diagnosis"] = {
+            **{field: "" for field in defect.FIELDS},
+            **{field: [] for field in defect.LIST_FIELDS}}
     write_json(output / "change-template.json", template)
     shutil.copyfile(HERE / "change.schema.json", output / "change.schema.json")
     context = {"run_id": run["run_id"], "subject": run["subject"], "capabilities": run["capabilities"],
@@ -249,8 +260,31 @@ def render(bundle, candidate, output, at=None):
                 "unmet criteria or implementation blockers; ordinary human PR "
                 "review occurs after the draft and belongs in the summary. "
                 "Never hide genuine blockers to claim a pass.\n")
-    (output / "invocation.md").write_text(render_skill("sf-build-change", context) + guidance,
-                                           encoding="utf-8")
+    invocation = render_skill("sf-build-change", context) + guidance
+    if target["mode"] == "defect":
+        diagnosis_context = {
+            "run_id": run["run_id"], "subject": run["subject"],
+            "capabilities": ["workspace.read", "execution.run", "artifact.write"],
+            "authorized_effects": [],
+            "inputs": {
+                "request": {"issue": target["issue"], "criteria": target["criteria"]},
+                "project-context": {"revision": target["base_sha"],
+                                    "candidate_directory": str(Path(candidate).resolve()),
+                                    "regression_file": target["regression_file"],
+                                    "trusted_check": defect.check(target)}},
+            "limits": "Diagnose before implementation; no publishing, no extra paths or authority."}
+        invocation = (
+            "# Defect mode: mandatory ordered phases\n\n"
+            "First apply sf-diagnose-defect to the pinned base and reproduce the reported symptom. "
+            "Record the mechanism, a plausible alternative, discriminating experiment, and uncertainties. "
+            "Next use sf-build-change to add the exact NEW regression file and make the smallest fix. "
+            "The fresh trusted host will require baseline GREEN, regression RED on the test-only base, "
+            "regression GREEN on the repair, and all host checks GREEN. The agent's own checks are "
+            "not authoritative. Populate every diagnosis field in the change submission; if reproduction "
+            "or diagnosis fails, submit a nonpassing status.\n\n"
+            + render_skill("sf-diagnose-defect", diagnosis_context)
+            + "\n# Implementation phase (after diagnosis)\n\n" + invocation)
+    (output / "invocation.md").write_text(invocation, encoding="utf-8")
     return {"status": "rendered", "skill": "sf-build-change"}
 
 
@@ -321,6 +355,7 @@ def load_response(path, run, target):
             raise ValueError("Agent edit is binary or exceeds the content budget.")
         if sha256(raw_content) == target["allowed_files"][edit["path"]]["sha256"]:
             raise ValueError("Agent submitted an unchanged file.")
+    defect.validate_response(response, target)
     return response, raw
 
 
