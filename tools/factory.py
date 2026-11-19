@@ -63,6 +63,11 @@ def proof_errors(policy, effect, artifacts):
                     {'unknown', 'unavailable', 'none', 'n/a'} for value in identity_values)
         if not known or reviewer.strip() == author.strip():
             errors.append("Policy requires an independently identified review.")
+    quality = by_type.get("quality-assessment")
+    if quality and policy["require_independent_review"]:
+        independence = quality["payload"].get("independence")
+        if not isinstance(independence, dict) or independence.get("established") is not True:
+            errors.append("Quality assessment does not establish required independent review.")
     review_status = by_type.get('review-status')
     if review_status:
         if review_status['payload'].get('readiness') != 'ready':
@@ -103,6 +108,7 @@ def plan(workflow_path, run_path, at, root=ROOT):
     validate_schema(workflow, "workflow", root)
     validate_schema(run, "run", root)
     catalog = contracts(root)
+    quality_mode = workflow.get("mode", "software") == "quality"
     errors = workflow_errors(workflow, catalog)
     if errors:
         raise ValueError(" ".join(errors))
@@ -141,9 +147,15 @@ def plan(workflow_path, run_path, at, root=ROOT):
             progressed = True
             contract = catalog[step["skill"]]
             reasons, bound = [], []
+            accepted_by_parent = step.get("accept_statuses", {})
             for parent in step["needs"]:
                 if parent not in completed:
                     reasons.append(f"Waiting for {parent} to complete with current evidence.")
+                elif quality_mode:
+                    accepted = accepted_by_parent.get(parent, ["passed"])
+                    for (producer, _), artifact in outputs.items():
+                        if producer == parent and artifact["status"] not in accepted:
+                            reasons.append(f"Upstream {parent} status {artifact['status']} not accepted by {identifier}.")
             for kind, binding in step["bindings"].items():
                 parts = binding.split(":")
                 if parts[0] == "input":
@@ -154,6 +166,8 @@ def plan(workflow_path, run_path, at, root=ROOT):
                     artifact = outputs.get((parts[1], parts[2]))
                     if artifact:
                         bound.append(artifact)
+                        if quality_mode and artifact["status"] not in accepted_by_parent.get(parts[1], ["passed"]):
+                            reasons.append(f"Input {kind} status {artifact['status']} not accepted by {identifier}.")
                     else:
                         reasons.append(f"Input {kind} is not available from {parts[1]}.")
             if 'max_work_items' in step:
@@ -169,7 +183,8 @@ def plan(workflow_path, run_path, at, root=ROOT):
                 found = {}
                 for relative in run["completed"][identifier]:
                     artifact, problems = inspect_artifact(contained_path(run_dir, relative), run["subject"],
-                        run["run_id"], at, policy["max_evidence_age_seconds"])
+                        run["run_id"], at, policy["max_evidence_age_seconds"],
+                        allow_nonpassing=quality_mode)
                     reasons.extend(problems)
                     kind = artifact["artifact_type"]
                     if kind in found:
@@ -216,8 +231,16 @@ def plan(workflow_path, run_path, at, root=ROOT):
         if not progressed:
             raise ValueError("Workflow cannot be ordered.")
     status = "complete" if set(workflow["completion"]).issubset(completed) else "ready" if ready else "blocked"
-    return {"workflow": workflow["id"], "run_id": run["run_id"], "status": status,
-            "ready": ready, "completed": sorted(completed), "blocked": blocked}
+    result = {"workflow": workflow["id"], "run_id": run["run_id"], "status": status,
+              "ready": ready, "completed": sorted(completed), "blocked": blocked}
+    if quality_mode:
+        # Workflow completion means a report exists, not that its subject passed.
+        result["outcomes"] = {
+            identifier: {kind: artifact["status"] for (producer, kind), artifact in outputs.items()
+                         if producer == identifier}
+            for identifier in sorted(completed)
+        }
+    return result
 
 
 def main(argv=None):

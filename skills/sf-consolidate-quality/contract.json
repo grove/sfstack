@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-consolidate-quality",
+  "version": "1.0.0",
+  "stage": "verify",
+  "summary": "Consolidate existing verification, review, impact, and selected specialist reports into one evidence-backed quality assessment.",
+  "inputs": [
+    {
+      "name": "change-set",
+      "description": "Immutable external or internally produced candidate under assessment.",
+      "required": true
+    },
+    {
+      "name": "verification-report",
+      "description": "Observed verification, including failures, blocks, and gaps.",
+      "required": true
+    },
+    {
+      "name": "review-report",
+      "description": "Observed review findings and independently identified reviewer.",
+      "required": true
+    },
+    {
+      "name": "request",
+      "description": "Quality scope and required vs. omitted quality dimensions.",
+      "required": false
+    },
+    {
+      "name": "specification",
+      "description": "Known authoritative criteria and quality constraints.",
+      "required": false
+    },
+    {
+      "name": "impact-assessment",
+      "description": "Downstream consequences and unverified obligations.",
+      "required": false
+    },
+    {
+      "name": "security-assessment",
+      "description": "Selected security-assessment evidence and limitations.",
+      "required": false
+    },
+    {
+      "name": "compatibility-report",
+      "description": "Selected compatibility-report evidence and limitations.",
+      "required": false
+    },
+    {
+      "name": "privacy-assessment",
+      "description": "Selected privacy-assessment evidence and limitations.",
+      "required": false
+    },
+    {
+      "name": "accessibility-report",
+      "description": "Selected accessibility-report evidence and limitations.",
+      "required": false
+    },
+    {
+      "name": "dependency-report",
+      "description": "Selected dependency-report evidence and limitations.",
+      "required": false
+    },
+    {
+      "name": "performance-report",
+      "description": "Selected performance-report evidence and limitations.",
+      "required": false
+    },
+    {
+      "name": "exploration-report",
+      "description": "Selected exploration-report evidence and limitations.",
+      "required": false
+    },
+    {
+      "name": "documentation-report",
+      "description": "Selected documentation-report evidence and limitations.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "quality-assessment"
+  ],
+  "capabilities": [
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "The consolidated verdict reflects actual status and findings from every selected report; a failed/blocked/inconclusive source never becomes a quality pass.",
+    "Each finding and dimension references retained evidence or a clearly identified gap.",
+    "Independent review claims are supported by host-supplied provenance; omitted checks and remediation boundaries remain visible."
+  ],
+  "failure_modes": [
+    "No inspectable fixed subject or required report is available: blocked.",
+    "Required evidence is stale or independence/coverage cannot be established: inconclusive.",
+    "At least one required criterion or unresolved blocking finding is demonstrably violated: failed."
+  ],
+  "retry_limit": 1
+}

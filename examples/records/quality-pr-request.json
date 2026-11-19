@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "artifact_id": "demo-quality-pr-request",
+  "artifact_type": "request",
+  "producer": {
+    "skill": "manual-input",
+    "version": "1.0.0"
+  },
+  "run_id": "tutorial-run",
+  "status": "passed",
+  "created_at": "2026-11-19T11:30:00Z",
+  "subject": {
+    "revision": "demo-candidate-7b4a",
+    "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+    "environment": "demo-isolated-profile"
+  },
+  "summary": "Synthetic PR quality assessment request; not linked to a real PR.",
+  "evidence": [
+    {
+      "id": "fixture",
+      "kind": "input",
+      "uri": "evidence/request.txt",
+      "sha256": "65bb508fd336954adef6beb15e4172c9f3d14e77d09808e39933e3b896ccb787",
+      "description": "Retained synthetic request content supplied by the tutorial host."
+    }
+  ],
+  "checks": [
+    {
+      "id": "example-completion",
+      "status": "passed",
+      "evidence": [
+        "fixture"
+      ],
+      "detail": "Simulated complete output for demonstrating reference evaluation."
+    }
+  ],
+  "unresolved": [
+    "Synthetic fixture; no live integration has been exercised."
+  ],
+  "next_action": "Follow the tutorial; do not use this fixture to authorize live work.",
+  "payload": {
+    "target_kind": "pull-request",
+    "target": "fictional/repository pull request #42",
+    "required_assessments": [
+      "verification-report",
+      "review-report",
+      "impact-assessment"
+    ],
+    "objective": "Inspect behavior and test evidence for existing display-name handling.",
+    "constraints": [
+      "read-only assessment",
+      "no source modification",
+      "no tracker or review publication"
+    ],
+    "scope": "Known display-name interface only",
+    "base_revision": "base-123",
+    "candidate_revision": "demo-candidate-7b4a"
+  }
+}

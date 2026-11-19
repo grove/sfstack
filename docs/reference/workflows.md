@@ -10,6 +10,8 @@ do not grant authorization or dispatch tools.
 
 | Recipe | External inputs | Completion boundary |
 | --- | --- | --- |
+| [quality](../../workflows/quality.json) | `request` | A read-only quality assessment of fixed existing code, a pull request, or an externally produced change. |
+| [quality-risk](../../workflows/quality-risk.json) | `request` | Quality assessment including selected security and compatibility checks. |
 | [discovery](../../workflows/discovery.json) | `request` | A specification informed by project context, opportunity assessment, and domain modeling. |
 | [feature](../../workflows/feature.json) | `request` | One bounded behavior increment, documented, verified, reviewed, and prepared for review. |
 | [defect](../../workflows/defect.json) | `request`, `specification`, `work-plan` | One diagnosed and scoped repair work unit with verification and review package. |
@@ -45,7 +47,7 @@ invalidate the candidate under review.
 | `id` | Stable kebab-case workflow name. |
 | `summary` | The recipe's intended outcome and boundary. |
 | `inputs` | Artifact types supplied from outside this workflow. |
-| `steps` | Nodes with `id`, `skill`, `needs`, `bindings`, and optional `max_work_items`. |
+| `steps` | Nodes with `id`, `skill`, `needs`, `bindings`, optional `max_work_items`, and quality-only `accept_statuses`. |
 | `completion` | Step IDs whose successful completion establishes the recipe outcome. |
 
 Every node's `id` is unique. `skill` names an installed contract in this checkout.
@@ -57,6 +59,32 @@ implementation node when the plan exceeds the bound, omits the required item
 information, or does not identify ready work. For these nodes, `work-plan.payload.items`
 must contain one or more item objects within the bound, each with an `id` included
 in `work-plan.payload.ready_frontier`.
+
+## Quality-only reporting of negative findings
+
+`mode` is optional and defaults to `software` (original semantics).
+`mode: quality` requires all steps to be observational: no declared effects,
+conditional effects, or mutation capabilities. These recipes report findings
+about the **fixed** candidate; their `change-set` comes from
+`sf-scope-candidate`, not `sf-build-change`.
+
+Quality steps may declare `accept_statuses` as a map from **named immediate
+predecessor step IDs** to explicit allowed report statuses. For example,
+`{"verify": ["passed", "failed", "blocked", "inconclusive"]}` lets a review
+consume a negative verification result **as evidence**, not as a quality pass.
+Every unlisted predecessor still requires `passed`. This is forbidden in
+Software Factory recipes. A failed scope/identity step cannot silently authorize
+later verification.
+
+The reference planner validates current subject, run, evidence digest, producer
+and output schema for all recorded reports. In quality mode it may mark a
+non-passing report as *recorded* and expose its status in `outcomes`.
+`status: complete` means the consolidated assessment is available; inspect
+the `quality-assessment.status` itself for the quality verdict. An absent
+prerequisite artifact still blocks the join.
+
+See [operating modes](../explanation/operating-modes.md) and the
+[quality how-to](../how-to/run-quality.md).
 
 ## Binding syntax
 

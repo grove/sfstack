@@ -1,12 +1,20 @@
 # sfstack
 
-**Portable skills for a verifiable software factory.**
+**Portable skills for verifiable software and quality factories.**
 
-sfstack is a library of 37 focused skills covering discovery, design, implementation,
+sfstack is a library of 39 focused skills covering discovery, design, implementation,
 verification, delivery, operations, and continuous improvement. Each skill defines
 one useful responsibility, its inputs, its output, and the evidence needed to
 finish. Use a single skill for a small task or compose skills into a controlled
 workflow.
+
+Two independent entry points share one evidence and policy system:
+**Software Factory** builds and delivers scoped changes;
+**Quality Factory** assesses existing code, external pull requests, and changes
+without implementing them. Software delivery may consume quality assessments,
+but quality assessment never requires a software-factory run.
+See [operating modes](docs/explanation/operating-modes.md) and the
+[quality guide](docs/how-to/run-quality.md).
 
 The instructions do not depend on a programming language, framework, coding agent,
 issue tracker, or deployment provider. An integration supplies the capabilities
@@ -17,6 +25,7 @@ visible; a successful-looking response is not a substitute for a verified result
 
 - **Try one skill:** [Create an outcome brief with your agent](docs/tutorials/first-skill.md).
 - **Try a factory workflow:** [Rehearse an offline factory run](docs/tutorials/factory-rehearsal.md).
+- **Assess existing code independently:** [Quality Factory rehearsal](docs/tutorials/quality-rehearsal.md).
 - **Exercise one execution boundary:** [Run a local adapter slice](docs/tutorials/local-slice.md).
 - **Plan evidence freshness:** [Revalidate a changed candidate](docs/how-to/revalidate-evidence.md).
 - **Measure relative value:** [Compare paired agent trials](docs/how-to/compare-trials.md).

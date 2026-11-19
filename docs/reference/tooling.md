@@ -210,3 +210,22 @@ See [comparative evaluation](../how-to/compare-trials.md).
 validates the returned artifact and evidence, and writes a new checkpoint.
 It is not a sandbox or an external-effect controller. See the
 [local slice tutorial](../tutorials/local-slice.md).
+
+## Consolidate a Quality Factory report
+
+`tools/quality_report.py` is an offline, read-only companion to the existing
+planner. It validates the selected reports, copies their retained evidence into
+a new bundle, and emits a typed `quality-assessment` (and optional new run
+manifest). It never launches a worker, changes the candidate, or authenticates
+source identities.
+
+```sh
+python tools/quality_report.py --workflow workflows/quality.json \
+  --run examples/quality-ready-run.json --out-dir scratch/quality \
+  --at 2026-11-19T12:00:00Z
+```
+
+Use a disposable copy of `examples` for rehearsals; see
+[quality rehearsal](../tutorials/quality-rehearsal.md). Non-passing report
+statuses remain visible. When a policy requires authenticated independent
+review, this offline helper reports the limitation rather than inventing proof.

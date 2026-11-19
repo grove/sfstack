@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "artifact_id": "demo-quality-outcome-brief",
+  "artifact_type": "outcome-brief",
+  "producer": {
+    "skill": "sf-clarify-outcome",
+    "version": "1.0.0"
+  },
+  "run_id": "tutorial-run",
+  "status": "passed",
+  "created_at": "2026-11-19T11:30:00Z",
+  "subject": {
+    "revision": "demo-candidate-7b4a",
+    "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+    "environment": "demo-isolated-profile"
+  },
+  "summary": "Synthetic outcome-brief for quality factory fixtures.",
+  "evidence": [
+    {
+      "id": "fixture",
+      "kind": "analysis",
+      "uri": "evidence/fixture.txt",
+      "sha256": "a59ba44cb09c730fad95517781dcaf5c173bb1f8fde13289485c6d1b7468d4ce",
+      "description": "Declared synthetic fixture, not live execution evidence."
+    }
+  ],
+  "checks": [
+    {
+      "id": "example-completion",
+      "status": "passed",
+      "evidence": [
+        "fixture"
+      ],
+      "detail": "Simulated complete output for demonstrating reference evaluation."
+    }
+  ],
+  "unresolved": [
+    "Synthetic fixture; no real code or PR was assessed."
+  ],
+  "next_action": "Continue synthetic quality factory rehearsal.",
+  "payload": {
+    "problem": "Assess existing behavior rather than implement a change.",
+    "desired_outcome": "Evidence-backed quality assessment on the existing display-name component.",
+    "acceptance_criteria": [
+      {
+        "id": "quality-display-name",
+        "criterion": "Accept valid names and reject blank names without corrupting saved data."
+      }
+    ],
+    "non_goals": [
+      "Implementation",
+      "Pull request publication"
+    ],
+    "decisions": []
+  }
+}

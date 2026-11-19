@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "artifact_id": "demo-quality-review-failed",
+  "artifact_type": "review-report",
+  "producer": {
+    "skill": "sf-review-change",
+    "version": "1.0.0"
+  },
+  "run_id": "tutorial-run",
+  "status": "failed",
+  "created_at": "2026-11-19T11:30:00Z",
+  "subject": {
+    "revision": "demo-candidate-7b4a",
+    "input_digest": "9c747da01027dc9f0193c26a6bc2b0b69fbecc8132fedabf3a1042dc55fa0e34",
+    "environment": "demo-isolated-profile"
+  },
+  "summary": "Synthetic review records a blocking uncorrected defect.",
+  "evidence": [
+    {
+      "id": "fixture",
+      "kind": "review",
+      "uri": "evidence/fixture.txt",
+      "sha256": "a59ba44cb09c730fad95517781dcaf5c173bb1f8fde13289485c6d1b7468d4ce",
+      "description": "Declared synthetic fixture, not live execution evidence."
+    }
+  ],
+  "checks": [
+    {
+      "id": "example-completion",
+      "status": "failed",
+      "evidence": [
+        "fixture"
+      ],
+      "detail": "Simulated complete output for demonstrating reference evaluation."
+    }
+  ],
+  "unresolved": [
+    "Blocking uncorrected defect remains."
+  ],
+  "next_action": "Request a separately authorized remediation workflow.",
+  "payload": {
+    "reviewer": "demo-reviewer",
+    "change_author": "demo-builder",
+    "independence_basis": "Distinct fictional identities supplied by the fixture host.",
+    "findings": [
+      {
+        "id": "missing-validation",
+        "blocking": true,
+        "disposition": "open",
+        "severity": "high",
+        "location": "demo/name-handler.py",
+        "mechanism": "Blank input is persisted.",
+        "impact": "Corrupt user-visible data.",
+        "evidence": [
+          "fixture"
+        ]
+      }
+    ]
+  }
+}

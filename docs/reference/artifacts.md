@@ -43,6 +43,14 @@ check ran or a reviewer is independent: the host must authenticate producers,
 inspect evidence, and enforce policy at the action boundary. Missing or malformed
 core payload fields block a reference gate.
 
+A consolidated `quality-assessment` uses the same envelope, with an
+additional [quality payload schema](../../schemas/payload-quality-assessment.schema.json)
+for its target, report statuses, coverage, findings, limitations, independence,
+and remediation boundary. The result is **not** permission to mutate. Any
+passing quality report must include passing verification and review evidence,
+plus passing evidence for every selected required dimension. Negative source
+statuses cannot be repackaged into a passing quality result.
+
 ## Evidence record
 
 Each evidence record has:
@@ -110,6 +118,7 @@ independence. The host still authenticates identities; the offline checker canno
 | Intent and design | `outcome-brief`, `opportunity-assessment`, `domain-model`, `specification`, `solution-design`, `experience-design` | A stated problem, decision, or design is sufficiently defined. |
 | Planning | `work-plan`, `test-plan`, `migration-plan`, `observability-plan`, `retirement-plan` | A scoped plan with verifiable completion and recovery conditions exists. |
 | Implementation | `change-set`, `documentation-report` | A bounded change or documentation update is described and evidenced. |
+| Consolidated quality | `quality-assessment` | Scoped quality verdict with report provenance and limitations; does not change source. |
 | Assessment | `diagnosis`, `impact-assessment`, `security-assessment`, `privacy-assessment`, `dependency-report` | The stated assessment was performed with explicit limits. |
 | Verification | `verification-report`, `exploration-report`, `compatibility-report`, `accessibility-report`, `performance-report` | The named criteria have observations tied to the candidate. |
 | Review | `review-report`, `review-package`, `review-status` | Review analysis, publication preparation, or the current review state is recorded. |

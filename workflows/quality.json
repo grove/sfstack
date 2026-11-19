@@ -1,0 +1,171 @@
+{
+  "schema_version": "1.0",
+  "id": "quality",
+  "mode": "quality",
+  "summary": "Assess an existing snapshot, pull request, or externally produced change through read-only verification, impact analysis, review, and consolidated evidence. No implementation or publication.",
+  "inputs": [
+    "request"
+  ],
+  "steps": [
+    {
+      "id": "orient",
+      "skill": "sf-map-project",
+      "needs": [],
+      "bindings": {
+        "request": "input:request"
+      }
+    },
+    {
+      "id": "clarify",
+      "skill": "sf-clarify-outcome",
+      "needs": [
+        "orient"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "specify",
+      "skill": "sf-write-specification",
+      "needs": [
+        "clarify",
+        "orient"
+      ],
+      "bindings": {
+        "outcome-brief": "step:clarify:outcome-brief",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "scope",
+      "skill": "sf-scope-candidate",
+      "needs": [
+        "orient",
+        "specify"
+      ],
+      "bindings": {
+        "request": "input:request",
+        "project-context": "step:orient:project-context",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "tests",
+      "skill": "sf-design-tests",
+      "needs": [
+        "scope",
+        "specify",
+        "orient"
+      ],
+      "bindings": {
+        "specification": "step:specify:specification",
+        "project-context": "step:orient:project-context",
+        "change-set": "step:scope:change-set"
+      }
+    },
+    {
+      "id": "impact",
+      "skill": "sf-assess-impact",
+      "needs": [
+        "scope",
+        "orient",
+        "specify"
+      ],
+      "bindings": {
+        "change-set": "step:scope:change-set",
+        "project-context": "step:orient:project-context",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "verify",
+      "skill": "sf-verify-change",
+      "needs": [
+        "scope",
+        "tests",
+        "specify"
+      ],
+      "bindings": {
+        "change-set": "step:scope:change-set",
+        "test-plan": "step:tests:test-plan",
+        "specification": "step:specify:specification"
+      }
+    },
+    {
+      "id": "review",
+      "skill": "sf-review-change",
+      "needs": [
+        "verify",
+        "impact",
+        "scope",
+        "specify",
+        "orient"
+      ],
+      "accept_statuses": {
+        "verify": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "impact": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ]
+      },
+      "bindings": {
+        "change-set": "step:scope:change-set",
+        "specification": "step:specify:specification",
+        "verification-report": "step:verify:verification-report",
+        "impact-assessment": "step:impact:impact-assessment",
+        "project-context": "step:orient:project-context"
+      }
+    },
+    {
+      "id": "consolidate",
+      "skill": "sf-consolidate-quality",
+      "needs": [
+        "review",
+        "verify",
+        "impact",
+        "scope",
+        "specify"
+      ],
+      "accept_statuses": {
+        "review": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "verify": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ],
+        "impact": [
+          "passed",
+          "failed",
+          "blocked",
+          "inconclusive"
+        ]
+      },
+      "bindings": {
+        "request": "input:request",
+        "change-set": "step:scope:change-set",
+        "specification": "step:specify:specification",
+        "verification-report": "step:verify:verification-report",
+        "review-report": "step:review:review-report",
+        "impact-assessment": "step:impact:impact-assessment"
+      }
+    }
+  ],
+  "completion": [
+    "consolidate"
+  ]
+}

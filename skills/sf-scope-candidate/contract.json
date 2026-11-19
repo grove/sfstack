@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "id": "sf-scope-candidate",
+  "version": "1.0.0",
+  "stage": "discover",
+  "summary": "Normalize an immutable existing-code snapshot, pull request, or externally produced change into a reviewable candidate without implementing it.",
+  "inputs": [
+    {
+      "name": "request",
+      "description": "Quality objective, target locator, candidate provenance and scope.",
+      "required": true
+    },
+    {
+      "name": "project-context",
+      "description": "Current project boundaries and accessible source/verification paths.",
+      "required": true
+    },
+    {
+      "name": "specification",
+      "description": "Known acceptance criteria and constraints, if available.",
+      "required": false
+    }
+  ],
+  "outputs": [
+    "change-set"
+  ],
+  "capabilities": [
+    "workspace.read",
+    "artifact.write"
+  ],
+  "effects": [],
+  "completion_checks": [
+    "Source type, immutable candidate identity, and available base/diff are established from observed evidence.",
+    "The inspected surfaces and known behavior claims are distinguished from unknown requirements.",
+    "No candidate source, tracker, review, or deployment is mutated."
+  ],
+  "failure_modes": [
+    "The named candidate or base cannot be resolved to inspectable content: blocked.",
+    "A mutable ref or uncertain external source cannot establish a fixed subject: inconclusive.",
+    "Evidence contradicts the requested target identity: failed."
+  ],
+  "retry_limit": 1
+}

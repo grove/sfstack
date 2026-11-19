@@ -62,5 +62,69 @@
   {
     "path": "tracker-mapping-nested.json",
     "schema": "tracker-mapping"
+  },
+  {
+    "path": "records/quality-request.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-pr-request.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-outcome-brief.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-test-plan.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-change-set.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-pr-change-set.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-impact-assessment.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-verification-failed.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-review-failed.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-security-assessment.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "records/quality-compatibility-report.json",
+    "schema": "artifact"
+  },
+  {
+    "path": "quality-run.json",
+    "schema": "run"
+  },
+  {
+    "path": "quality-ready-run.json",
+    "schema": "run"
+  },
+  {
+    "path": "quality-failed-run.json",
+    "schema": "run"
+  },
+  {
+    "path": "quality-risk-ready-run.json",
+    "schema": "run"
+  },
+  {
+    "path": "quality-pr-ready-run.json",
+    "schema": "run"
   }
 ]
