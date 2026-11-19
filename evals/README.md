@@ -1,7 +1,7 @@
-# Behavioral evaluation seeds
+# Behavioral evaluation and executable regressions
 
-The regression suite in `tests/` checks sfstack's reference tooling. These cases
-instead exercise an agent using the skills. Keep the candidate workspace and
+The regression suite in `tests/` checks sfstack's reference tooling. The inventory
+seed below can also exercise an agent using the skills. Keep the candidate workspace and
 grader separate so the worker receives the task and initial files, not a supplied
 repair or grading implementation. Run candidate code only in an isolated
 environment with the permissions and resource limits appropriate to that code.
@@ -35,6 +35,40 @@ corpus across project types, languages, failure modes, tools, and missing-capabi
 conditions before making comparative quality or autonomy claims. Keep held-out
 cases separate from authoring examples and record the agent, model, tools, skill
 versions, cost, and evaluation conditions for every comparative run.
+
+## Execute the quality handoff with real tests
+
+```sh
+python evals/run_quality_regression.py --output /tmp/sfstack-quality-regression
+```
+
+Use a new destination. The command creates disposable copies of this known tiny
+fixture and uses the [trusted unittest adapter](../examples/adapters/README.md)
+through the local execution boundary. It pins candidate and check-directory
+digests, executes the six behavior checks in a subprocess, retains raw stdout,
+stderr and actual counts, and consolidates the resulting quality evidence.
+The candidate under assessment is never repaired during a run: the corrected
+candidate is a separate, explicitly prepared input with its own identity.
+
+| Case | Verification | Consolidated quality | Evidence |
+| --- | --- | --- | --- |
+| Original equality-boundary defect | Failed | Failed | Six checks run; the failing equality assertion survives as a blocking finding. |
+| Separate corrected candidate | Passed | Inconclusive | Six passing checks; independent review is not authenticated. |
+| Required equality check skipped | Inconclusive | Inconclusive | The omitted check is retained in `skipped_required`. |
+| Empty test discovery | Inconclusive | Inconclusive | Zero checks run; missing required IDs remain explicit. |
+
+The exercise also verifies that changing the expected revision or modifying
+retained runner output causes evidence rejection. `summary.json` identifies the
+case reports and records limitations; the command exits nonzero if any expected
+behavior changes. These assertions also run in `tests/test_quality_regression.py`.
+
+Only verification is a real execution result. Planning, scope, and review records
+are explicitly labelled regression scaffolding; no live agent or provider is
+invoked. The independent-review requirement remains enabled, so a green test run
+does not turn the fixture review into quality clearance. This is an executable
+integration regression, not a bare-agent versus skills experiment, a held-out
+effectiveness result, or evidence of production isolation. Execute unfamiliar
+candidate code only in a host-provided sandbox.
 
 ## Initial observed exercise
 

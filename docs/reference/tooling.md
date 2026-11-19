@@ -10,6 +10,21 @@ Run commands from the repository root:
 python -m pip install -r requirements-dev.txt
 ```
 
+## Use the local CLI
+
+[`tools/sfstack.py`](../../tools/sfstack.py) groups four common operations:
+`init` creates a quality run for a clean Git checkout, `status` evaluates readiness,
+`run` advances an explicitly bounded number of effect-free steps through a trusted
+adapter, and `assess` consolidates existing quality reports into a readable result.
+All commands support `--json`. See the [local guide](../how-to/run-local.md)
+for arguments, safe resume, presets, and verdict-sensitive exit codes.
+
+The runner reuses the existing workflow, policy, planner, adapter, and artifact
+formats. It creates a new checkpoint per completed step. It supplies no scheduler,
+sandbox, or effectful tool enforcement. A real
+[unittest adapter and regression](../../evals/README.md#execute-the-quality-handoff-with-real-tests)
+exercise test execution and negative handoffs with retained evidence.
+
 ## Validate the library
 
 ```sh
@@ -113,6 +128,14 @@ The command trusts the host to authenticate grants and evidence producers. It
 cannot prove that a log was honestly generated or that a named reviewer is a
 particular real person. It makes no external changes. The actual adapter must
 recheck resource state and enforce the decision immediately before the effect.
+
+Optional `required_quality_reports` applies host-required dimensions to a supplied
+quality assessment; `required_artifacts` still decides whether an assessment is
+required at all. Optional `quality_imports` permits only exact, unexpired,
+hash-pinned quality assessments from a named source run into a named consumer run.
+It preserves the original envelope and does not relax subject, age, integrity,
+independence, coverage, or effect-authorization checks. See
+[composition](../how-to/run-quality.md#4-compose-back-into-software-factory-only-at-an-authorized-boundary).
 
 ## Export standalone packages
 

@@ -23,6 +23,8 @@ visible; a successful-looking response is not a substitute for a verified result
 
 ## Start here
 
+- **Start a local quality run:** [Initialize, inspect, and resume](docs/how-to/run-local.md) with one CLI.
+- **See real test evidence:** [Execute the quality regression](evals/README.md#execute-the-quality-handoff-with-real-tests).
 - **Try one skill:** [Create an outcome brief with your agent](docs/tutorials/first-skill.md).
 - **Try a factory workflow:** [Rehearse an offline factory run](docs/tutorials/factory-rehearsal.md).
 - **Assess existing code independently:** [Quality Factory rehearsal](docs/tutorials/quality-rehearsal.md).
@@ -35,6 +37,35 @@ visible; a successful-looking response is not a substitute for a verified result
 
 The [documentation](docs/README.md) separates tutorials, how-to guides, reference,
 and explanation using [Diátaxis](https://diataxis.fr/).
+
+### A first working example
+
+Run actual tests against a small defective candidate, a corrected candidate,
+and skipped/empty test suites, retaining their quality reports:
+
+```sh
+python -m pip install -r requirements-dev.txt
+python evals/run_quality_regression.py --output ../sfstack-quality-demo
+```
+
+The directory must be new. The defect remains a failed assessment; passing tests
+alone remain inconclusive on independent review. Planning and review inputs in
+this example are declared fixtures. No live agent or authenticated reviewer is
+implied.
+
+For your own clean local Git checkout:
+
+```sh
+python tools/sfstack.py init --repo ../my-project --out ../my-quality-run \
+  --goal "Assess the public behavior and regression coverage" \
+  --environment my-isolated-python
+python tools/sfstack.py status --run ../my-quality-run/run.json
+```
+
+Initialization pins the candidate, creates the policy and request, and selects
+the existing quality workflow. `--profile risk` also selects security and
+compatibility. A trusted adapter supplies the actual work; the
+[local guide](docs/how-to/run-local.md) explains bounded execution and resume.
 
 ## What is included
 
@@ -49,9 +80,11 @@ and explanation using [Diátaxis](https://diataxis.fr/).
 | Reference tools | `tools/` and `tests/` | Validate the library, inspect readiness, assess gates, and export skills. |
 | Behavioral evaluation | [Seed case and rubric](evals/README.md) | Exercise skills on an isolated coding task and report evidence and limits. |
 
-The reference tools are offline utilities. A [bounded local slice](docs/tutorials/local-slice.md)
-can dispatch a **trusted Python adapter** for a single effect-free skill and
-validate its result, but supplies no sandbox or production tool boundary.
+The reference tools validate local records. A [bounded local runner](docs/how-to/run-local.md)
+can dispatch **trusted Python adapters** for effect-free skills, validate their
+results, and save a checkpoint after each step. A
+[reference unittest adapter](examples/adapters/README.md) executes real checks
+on pinned candidates. These tools supply no sandbox or production tool boundary.
 The library does not supply a live coding agent, tracker, merge queue, or
 deployment service. A production controller must provide persistence,
 authentication, isolation, scheduling, and enforcement at the actual tool

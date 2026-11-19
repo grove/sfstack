@@ -160,7 +160,8 @@
       "bindings": {
         "change-set": "step:build:change-set",
         "specification": "step:specify:specification",
-        "verification-report": "step:verify:verification-report"
+        "verification-report": "step:verify:verification-report",
+        "impact-assessment": "step:impact:impact-assessment"
       }
     },
     {

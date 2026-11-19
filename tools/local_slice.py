@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 import json
+import os
 import shutil
 from pathlib import Path
 import subprocess
@@ -17,6 +18,14 @@ import tempfile
 
 from common import ROOT, contained_path, contracts, inspect_artifact, load_json, now
 from factory import plan
+
+
+def stderr_tail(stream):
+    """Keep diagnostics useful without capturing an unbounded pipe in memory."""
+    length = stream.seek(0, os.SEEK_END)
+    stream.seek(max(0, length - 4096))
+    tail = stream.read(4096).decode("utf-8", errors="replace").strip()
+    return f"\nAdapter stderr (last 4096 bytes):\n{tail}" if tail else ""
 
 
 def run_one(workflow_path, run_path, step_id, adapter_script, out_run, artifact_dir,
@@ -67,57 +76,102 @@ def run_one(workflow_path, run_path, step_id, adapter_script, out_run, artifact_
     if not script.is_file():
         raise ValueError("Adapter script does not exist.")
     output_dir.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".sfstack-step-", dir=run_dir) as staging:
-        stage = Path(staging)
-        result_path = stage / "result.json"
-        invocation = {
-            "skill": step["skill"],
-            "skill_root": str(root / "skills" / step["skill"]),
-            "contract": contract,
-            "step": step_id,
-            "run_id": run["run_id"],
-            "subject": run["subject"],
-            "bindings": bindings,
-            "observed_at": at.isoformat().replace("+00:00", "Z"),
-            "output_type": contract["outputs"][0],
-        }
-        invocation_path = stage / "invocation.json"
-        invocation_path.write_text(json.dumps(invocation, indent=2) + "\n", encoding="utf-8")
-        try:
-            proc = subprocess.run(
-                [sys.executable, str(script), "--invocation", str(invocation_path),
-                 "--output", str(result_path)],
-                cwd=run_dir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                timeout=timeout, check=False,
+    reservation = output_dir.with_name(f".{output_dir.name}.attempt.json")
+    try:
+        attempt = reservation.open("x", encoding="utf-8")
+    except FileExistsError as exc:
+        raise ValueError(
+            f"Interrupted or concurrent attempt recorded at {reservation}. "
+            "Inspect its process and outputs before explicitly retrying."
+        ) from exc
+    with attempt:
+        json.dump({"step": step_id, "input_checkpoint": str(run_path),
+                   "output_checkpoint": str(output_run), "artifact_dir": str(output_dir),
+                   "started_at": at.isoformat().replace("+00:00", "Z")}, attempt, indent=2)
+        attempt.write("\n")
+        attempt.flush()
+        os.fsync(attempt.fileno())
+    publication_started = False
+    try:
+        with tempfile.TemporaryDirectory(prefix=".sfstack-step-", dir=run_dir) as staging:
+            stage = Path(staging)
+            result_path = stage / "result.json"
+            invocation = {
+                "skill": step["skill"],
+                "skill_root": str(root / "skills" / step["skill"]),
+                "contract": contract,
+                "step": step_id,
+                "run_id": run["run_id"],
+                "subject": run["subject"],
+                "bindings": bindings,
+                "observed_at": at.isoformat().replace("+00:00", "Z"),
+                "output_type": contract["outputs"][0],
+            }
+            invocation_path = stage / "invocation.json"
+            invocation_path.write_text(json.dumps(invocation, indent=2) + "\n", encoding="utf-8")
+            # This diagnostic stream is intentionally outside the artifact
+            # staging directory; successful bundles contain only adapter output.
+            with tempfile.TemporaryFile(dir=run_dir) as diagnostics:
+                try:
+                    proc = subprocess.run(
+                        [sys.executable, str(script), "--invocation", str(invocation_path),
+                         "--output", str(result_path)],
+                        cwd=run_dir, stdout=subprocess.DEVNULL, stderr=diagnostics,
+                        timeout=timeout, check=False,
+                    )
+                except subprocess.TimeoutExpired as exc:
+                    raise ValueError("Adapter exceeded the declared time limit."
+                                     + stderr_tail(diagnostics)) from exc
+                if proc.returncode != 0:
+                    raise ValueError(f"Adapter exited with status {proc.returncode}."
+                                     + stderr_tail(diagnostics))
+            policy = load_json(contained_path(run_dir, run["policy"]))
+            artifact, errors = inspect_artifact(
+                result_path, run["subject"], run["run_id"], at,
+                policy["max_evidence_age_seconds"], expected_type=contract["outputs"][0],
+                allow_nonpassing=workflow.get("mode") == "quality",
             )
-        except subprocess.TimeoutExpired as exc:
-            raise ValueError("Adapter exceeded the declared time limit.") from exc
-        if proc.returncode != 0:
-            raise ValueError(f"Adapter exited with status {proc.returncode}.")
-        policy = load_json(contained_path(run_dir, run["policy"]))
-        artifact, errors = inspect_artifact(
-            result_path, run["subject"], run["run_id"], at,
-            policy["max_evidence_age_seconds"], expected_type=contract["outputs"][0],
-        )
-        if artifact["producer"] != {"skill": step["skill"], "version": contract["version"]}:
-            errors.append("Producer identity/version does not match the invoked skill.")
-        if errors:
-            raise ValueError("Adapter returned invalid evidence: " + "; ".join(errors))
-        # The run file is not overwritten. A new checkpoint is written only
-        # after the output has passed evidence and producer validation.
-        stage.joinpath("invocation.json").unlink()
-        shutil.copytree(stage, output_dir)
-    updated = deepcopy(run)
-    updated.setdefault("completed", {})[step_id] = [
-        str((output_dir / "result.json").relative_to(run_dir))
-    ]
-    with output_run.open("x", encoding="utf-8") as stream:
-        json.dump(updated, stream, indent=2)
-        stream.write("\n")
+            if artifact["producer"] != {"skill": step["skill"], "version": contract["version"]}:
+                errors.append("Producer identity/version does not match the invoked skill.")
+            if errors:
+                raise ValueError("Adapter returned invalid evidence: " + "; ".join(errors))
+            # The run file is not overwritten. A new checkpoint is written only
+            # after the output has passed evidence and producer validation.
+            stage.joinpath("invocation.json").unlink()
+            publication_started = True
+            shutil.copytree(stage, output_dir)
+        updated = deepcopy(run)
+        updated.setdefault("completed", {})[step_id] = [
+            str((output_dir / "result.json").relative_to(run_dir))
+        ]
+        # Publish the completed manifest atomically without replacing an existing
+        # checkpoint. A reader must never observe half of a JSON document.
+        temporary_run = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=run_dir,
+                                             prefix=".sfstack-checkpoint-", delete=False) as stream:
+                temporary_run = Path(stream.name)
+                json.dump(updated, stream, indent=2)
+                stream.write("\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.link(temporary_run, output_run)
+        finally:
+            if temporary_run is not None:
+                temporary_run.unlink(missing_ok=True)
+    except Exception:
+        # A known adapter/validation failure has no usable result to preserve.
+        # Once publication starts, or on process interruption (BaseException),
+        # retain the reservation so an ambiguous attempt is never auto-retried.
+        if not publication_started:
+            reservation.unlink(missing_ok=True)
+        raise
+    reservation.unlink()
     next_state = plan(workflow_path, output_run, at, root=root)
     return {
         "completed_step": step_id,
         "artifact": str(output_dir / "result.json"),
+        "artifact_status": artifact["status"],
         "checkpoint": str(output_run),
         "next_ready": next_state["ready"],
         "workflow_status": next_state["status"],
