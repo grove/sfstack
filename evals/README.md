@@ -101,6 +101,25 @@ neither case establishes independent human approval or grants mutation rights.
 The separate local quality regression above keeps independent review required
 and therefore remains inconclusive for its corrected candidate.
 
+## Execute the bounded Software Factory handoff
+
+```sh
+python evals/run_software_regression.py --output /tmp/sfstack-software-regression
+```
+
+This regression exercises the actual issue-input preparation, build-contract
+rendering, scoped file reconstruction, immutable Git identity, and host
+verification used by the [Software Factory](../docs/how-to/run-software-factory.md).
+An unfixed inventory proposal fails the six behavioral checks. A separate fixed
+proposal passes the same checks with a different candidate commit. Both retain
+the original issue and criteria, submission, source bytes, logs, and gate result.
+Validation CI publishes these records as `software-regression`.
+
+The selected issue and builder responses are explicitly synthetic. The Git
+commits, subprocess checks, and host decisions are real. This demonstrates that
+an optimistic builder response cannot override a behavioral failure; it does
+not measure live Copilot implementation, GitHub publication, or human approval.
+
 ## Initial observed exercise
 
 On 2026-11-19, one isolated agent exercise used the diagnosis, implementation, and

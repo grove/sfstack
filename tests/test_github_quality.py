@@ -136,6 +136,27 @@ class GitHubQualityTests(unittest.TestCase):
         self.assertTrue(assessment["evidence"])
         self.assertEqual("", self.git("status", "--porcelain"))
 
+    def test_review_includes_pinned_pr_acceptance_intent(self):
+        self.prepare()
+        response = self.review()
+        self.assertIn("pull-request-intent", {item["id"] for item in response["criteria"]})
+        specification = load_json(self.bundle / "specification.json")["payload"]
+        self.assertEqual(self.pr["body"], specification["pull_request_context"]["body"])
+        response["criteria"] = [item for item in response["criteria"] if item["id"] != "pull-request-intent"]
+        self.write(self.review_path, {"items": [{"type": "submit_review", "review_json": json.dumps(response)}]})
+        self.assertEqual("blocked", self.finalize()["status"])
+
+    def test_changed_acceptance_description_invalidates_otherwise_green_review(self):
+        self.prepare()
+        self.review()
+        current = deepcopy(self.pr)
+        current["body"] = "The public answer must be 99."
+        current_path = self.directory / "current-pr.json"
+        self.write(current_path, current)
+        result = self.finalize(current_pr_path=current_path)
+        self.assertEqual("blocked", result["status"])
+        self.assertTrue(any("acceptance description changed" in reason for reason in result["reasons"]))
+
     def test_agent_success_cannot_override_a_real_test_failure(self):
         self.prepare("failed")
         self.assertEqual("failed", self.report["status"])

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Bounded sf-build-change response; identity and evidence are checked by the host",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "subject", "status", "summary", "criteria_addressed", "behavior_changes", "checks_run", "remaining_work", "edits"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "subject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "input_digest", "environment"],
+      "properties": {
+        "revision": {"type": "string"},
+        "input_digest": {"type": "string"},
+        "environment": {"type": "string"}
+      }
+    },
+    "status": {"enum": ["passed", "failed", "blocked", "inconclusive"]},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "criteria_addressed": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "maxLength": 100}},
+    "behavior_changes": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+    "checks_run": {
+      "type": "array", "maxItems": 16,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["command", "observed"],
+        "properties": {
+          "command": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "observed": {"type": "string", "minLength": 1, "maxLength": 4000}
+        }
+      }
+    },
+    "remaining_work": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+    "edits": {
+      "type": "array", "maxItems": 8,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["path", "content"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "maxLength": 240},
+          "content": {"type": "string", "maxLength": 32768}
+        }
+      }
+    }
+  }
+}

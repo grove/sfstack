@@ -39,6 +39,7 @@ class FakeGitHub:
         self.artifacts = []
         self.calls = []
         self.fail_dispatch = False
+        self.fail_check_creation = False
         self.add_run(100)
 
     @staticmethod
@@ -97,8 +98,11 @@ class FakeGitHub:
     def post(self, path, body):
         self.calls.append(("POST", path, deepcopy(body)))
         if path.endswith("/check-runs"):
+            if self.fail_check_creation:
+                raise ValueError("Check creation unavailable")
             identifier = max(self.checks, default=500) + 1
-            check = {"id": identifier, "app": {"slug": "github-actions"}, **deepcopy(body)}
+            check = {"id": identifier, "app": {"slug": "github-actions"},
+                     "conclusion": None, "completed_at": None, **deepcopy(body)}
             self.checks[identifier] = check
             return deepcopy(check)
         if path.endswith("/actions/workflows/" + QUALITY + "/dispatches"):
@@ -113,8 +117,11 @@ class FakeGitHub:
             raise AssertionError("Unexpected GitHub mutation: " + path)
         check = self.checks[int(path.rsplit("/", 1)[-1])]
         check.update(deepcopy(body))
-        # GitHub uses status to distinguish an in-progress rerun from an old
-        # completion. Assert status as well as conclusion in all tests below.
+        # Match the live API behavior that exposed the retry bug: an existing
+        # conclusion keeps the check completed. PATCH status=in_progress alone
+        # does not reopen it or clear its completion.
+        if check.get("conclusion") is not None:
+            check["status"] = "completed"
         return deepcopy(check)
 
 
@@ -216,9 +223,54 @@ class GitHubAutomationTests(unittest.TestCase):
         self.check(publication).update({"status": "completed", "conclusion": "success"})
         retry = self.new_host(100, attempt=2)
         next_publication = self.start(retry)
-        self.assertEqual(publication["check_id"], next_publication["check_id"])
-        self.assertEqual("in_progress", self.check(publication)["status"])
-        self.assertEqual(2, check_owner(self.check(publication))["a"])
+        self.assertNotEqual(publication["check_id"], next_publication["check_id"])
+        self.assertEqual("failure", self.check(publication)["conclusion"])
+        self.assertEqual("in_progress", self.check(next_publication)["status"])
+        self.assertIsNone(self.check(next_publication)["conclusion"])
+        self.assertIsNone(self.check(next_publication)["completed_at"])
+        self.assertEqual(2, check_owner(self.check(next_publication))["a"])
+        self.assertEqual(2, check_owner(self.check(next_publication))["g"])
+
+    def test_completed_attempt_cannot_restart_itself_or_clear_its_result(self):
+        publication = self.start()
+        self.host.publish(publication, "/absent", "failure")
+        writes = len(self.api.mutations)
+        self.assertFalse(self.host.start(1)["eligible"])
+        self.assertEqual("failure", self.host.publish(publication, "/absent", "success")["conclusion"])
+        self.assertEqual(writes, len(self.api.mutations))
+
+    def test_failed_fresh_check_creation_cannot_leave_an_old_success(self):
+        publication = self.start()
+        self.check(publication).update({"status": "completed", "conclusion": "success"})
+        self.api.fail_check_creation = True
+        newer = self.new_host(101)
+        with self.assertRaisesRegex(ValueError, "creation unavailable"):
+            self.start(newer)
+        self.assertEqual("completed", self.check(publication)["status"])
+        self.assertEqual("failure", self.check(publication)["conclusion"])
+        self.assertFalse(self.host.start(1)["eligible"])
+
+    def test_legacy_v2_check_migrates_to_a_new_generation(self):
+        publication = self.start()
+        legacy = check_owner(self.check(publication))
+        legacy["v"] = 2
+        legacy.pop("g")
+        self.check(publication).update({"external_id": owner_text(legacy),
+                                        "status": "completed", "conclusion": "success"})
+        current = self.start(self.new_host(101))
+        self.assertEqual(1, check_owner(self.check(current))["g"])
+        self.assertEqual("failure", self.check(publication)["conclusion"])
+        self.assertEqual(current["check_id"], self.host.find_check(self.api.pulls[1])["id"])
+
+    def test_completed_at_and_response_order_cannot_choose_an_old_generation(self):
+        old = self.start()
+        current = self.start(self.new_host(101))
+        self.check(old)["completed_at"] = "2099-01-01T00:00:00Z"
+        self.api.checks = dict(reversed(list(self.api.checks.items())))
+        self.assertEqual(current["check_id"], self.host.find_check(self.api.pulls[1])["id"])
+        writes = len(self.api.mutations)
+        self.assertFalse(self.host.publish(old, "/absent", "success")["published"])
+        self.assertEqual(writes, len(self.api.mutations))
 
     def test_old_run_cannot_acquire_or_finish_a_newer_runs_check(self):
         original = self.start()
@@ -298,6 +350,17 @@ class GitHubAutomationTests(unittest.TestCase):
         self.assertEqual("request", check_owner(check)["k"])
         self.assertFalse(any("artifacts" in call[1] for call in self.api.calls))
 
+    def test_queued_request_hands_its_pending_generation_to_the_correct_run(self):
+        coordinator, _, event = self.signal()
+        coordinator.dispatch(event)
+        queued = coordinator.find_check(self.api.pulls[1])
+        controller = self.new_host(201, title="sfstack quality / PR #1 / request 200-1")
+        started = controller.start(1, HEAD, BASE, "200-1")
+        self.assertTrue(started["eligible"])
+        self.assertEqual(queued["id"], started["check_id"])
+        self.assertEqual(1, check_owner(self.check(started["publication"]))["g"])
+        self.assertEqual("in_progress", self.check(started["publication"])["status"])
+
     def test_empty_signal_pr_association_resolves_exact_current_branch_and_head(self):
         coordinator, signal, event = self.signal()
         signal["pull_requests"] = []
@@ -330,6 +393,19 @@ class GitHubAutomationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "provenance"):
                     coordinator.dispatch(event)
                 self.assertEqual([], self.api.mutations)
+
+    def test_lifecycle_workflow_routes_by_path_instead_of_custom_run_name(self):
+        workflow = (ROOT / ".github/workflows/sfstack-quality-events.yml").read_text()
+        self.assertNotIn("github.event.workflow_run.name", workflow)
+        for path in (QUALITY, SIGNAL):
+            self.assertIn("github.event.workflow_run.path == '.github/workflows/" + path + "'", workflow)
+        publication = self.start()
+        self.api.runs[100].update({"name": "sfstack quality / PR #1 / request manual",
+                                  "status": "completed", "conclusion": "cancelled"})
+        coordinator = self.new_host(200, EVENTS, "workflow_run")
+        result = coordinator.reconcile({"action": "completed", "workflow_run": deepcopy(self.api.runs[100])})
+        self.assertEqual("failure", result["conclusion"])
+        self.assertEqual("failure", self.check(publication)["conclusion"])
 
     def test_stale_signal_head_or_attempt_does_not_dispatch(self):
         for variant in ("head", "attempt", "ambiguous"):
@@ -378,8 +454,11 @@ class GitHubAutomationTests(unittest.TestCase):
         coordinator = self.new_host(200, EVENTS, "push", head=self.api.tip)
         result = coordinator.dispatch({"ref": "refs/heads/main", "after": self.api.tip, "deleted": False})
         self.assertEqual([1], result["dispatched"])
-        self.assertEqual("queued", self.check(publication)["status"])
-        self.assertEqual(self.api.tip, check_owner(self.check(publication))["b"])
+        current = coordinator.find_check(self.api.pulls[1])
+        self.assertNotEqual(publication["check_id"], current["id"])
+        self.assertEqual("failure", self.check(publication)["conclusion"])
+        self.assertEqual("queued", current["status"])
+        self.assertEqual(self.api.tip, check_owner(current)["b"])
         writes = len(self.api.mutations)
         self.assertFalse(self.host.publish(publication, "/absent", "success")["published"])
         self.assertEqual(writes, len(self.api.mutations))
@@ -396,14 +475,15 @@ class GitHubAutomationTests(unittest.TestCase):
 
     def test_late_cancellation_cannot_close_newer_owner(self):
         publication = self.start()
-        self.start(self.new_host(101))
+        current = self.start(self.new_host(101))
         self.api.runs[100].update({"status": "completed", "conclusion": "cancelled"})
         coordinator = self.new_host(200, EVENTS, "workflow_run")
         writes = len(self.api.mutations)
         event = {"action": "completed", "workflow_run": deepcopy(self.api.runs[100])}
         self.assertFalse(coordinator.reconcile(event)["published"])
         self.assertEqual(writes, len(self.api.mutations))
-        self.assertEqual(101, check_owner(self.check(publication))["i"])
+        self.assertEqual(101, check_owner(self.check(current))["i"])
+        self.assertEqual(100, check_owner(self.check(publication))["i"])
 
     def test_rerun_lifecycle_invalidates_an_earlier_attempt_pass(self):
         publication = self.start()
@@ -413,18 +493,21 @@ class GitHubAutomationTests(unittest.TestCase):
         event = {"action": "in_progress", "workflow_run": deepcopy(self.api.runs[100])}
         result = coordinator.reconcile(event)
         self.assertEqual("pending", result["conclusion"])
-        self.assertEqual("in_progress", self.check(publication)["status"])
-        self.assertEqual(2, check_owner(self.check(publication))["a"])
+        current = self.api.checks[result["check_id"]]
+        self.assertNotEqual(publication["check_id"], current["id"])
+        self.assertEqual("failure", self.check(publication)["conclusion"])
+        self.assertEqual("in_progress", current["status"])
+        self.assertEqual(2, check_owner(current)["a"])
 
     def test_old_completion_event_cannot_close_a_new_run_attempt(self):
         publication = self.start()
         old_event = {"action": "completed", "workflow_run": deepcopy(self.api.runs[100])}
-        self.start(self.new_host(100, attempt=2))
+        current = self.start(self.new_host(100, attempt=2))
         coordinator = self.new_host(200, EVENTS, "workflow_run")
         writes = len(self.api.mutations)
         self.assertFalse(coordinator.reconcile(old_event)["published"])
         self.assertEqual(writes, len(self.api.mutations))
-        self.assertEqual(2, check_owner(self.check(publication))["a"])
+        self.assertEqual(2, check_owner(self.check(current))["a"])
 
 
 class GitHubPublicationEvidenceTests(unittest.TestCase):
@@ -438,6 +521,8 @@ class GitHubPublicationEvidenceTests(unittest.TestCase):
         self.api = FakeGitHub()
         self.api.tip = fixed["base_sha"]
         self.api.pulls[1] = FakeGitHub.pull(head=fixed["head_sha"], base=fixed["base_sha"])
+        assessed_pr = json.loads((self.directory / "regression/fixed/pr.json").read_text())
+        self.api.pulls[1].update({key: assessed_pr[key] for key in ("title", "body")})
         self.api.add_run(9002, head=fixed["base_sha"])
         self.context = {"repository": REPOSITORY, "run_id": "9002", "run_attempt": "1",
                         "workflow_sha": fixed["base_sha"], "ref": "refs/heads/main", "event_name": "workflow_dispatch"}
@@ -464,11 +549,41 @@ class GitHubPublicationEvidenceTests(unittest.TestCase):
         self.assertFalse(self.host.publish(self.publication, self.result, "failure")["published"])
         self.assertEqual(writes, len(self.api.mutations))
 
+    def test_fresh_run_publishes_pass_after_an_earlier_completed_failure(self):
+        # Reproduce the live defect: same PR head, an old completed failure,
+        # then a new all-green controller with retained real bridge evidence.
+        self.api.checks.clear()
+        self.api.add_run(9001, head=self.api.tip)
+        earlier = Host(self.api, {**self.context, "run_id": "9001"})
+        old = earlier.start(1)["publication"]
+        self.assertEqual("failure", earlier.publish(old, "/absent", "failure")["conclusion"])
+        current = self.host.start(1)["publication"]
+        self.assertNotEqual(old["check_id"], current["check_id"])
+        self.assertEqual("in_progress", self.api.checks[current["check_id"]]["status"])
+        self.assertIsNone(self.api.checks[current["check_id"]]["conclusion"])
+        self.assertEqual("success", self.host.publish(current, self.result, "success")["conclusion"])
+        self.assertEqual("success", self.api.checks[current["check_id"]]["conclusion"])
+        writes = len(self.api.mutations)
+        self.assertFalse(earlier.publish(old, self.result, "success")["published"])
+        self.assertEqual(writes, len(self.api.mutations))
+
     def test_historical_pr_base_sha_does_not_invalidate_current_assessment(self):
         self.api.pulls[1]["base"]["sha"] = "d" * 40
         result = self.host.publish(self.publication, self.result, "success")
         self.assertEqual("success", result["conclusion"])
         self.assertEqual("success", self.api.checks[self.publication["check_id"]]["conclusion"])
+
+    def test_changed_pr_title_during_publication_queue_blocks_otherwise_passing_evidence(self):
+        self.api.pulls[1]["title"] = "Implement different behavior after review"
+        result = self.host.publish(self.publication, self.result, "success")
+        self.assertEqual("failure", result["conclusion"])
+        self.assertIn("title or acceptance description changed", result["reason"])
+
+    def test_changed_acceptance_description_during_publication_queue_blocks_old_review(self):
+        self.api.pulls[1]["body"] += "\nNew required behavior was added after the quality gate completed."
+        result = self.host.publish(self.publication, self.result, "success")
+        self.assertEqual("failure", result["conclusion"])
+        self.assertIn("title or acceptance description changed", result["reason"])
 
     def test_failure_evidence_cannot_be_moved_to_a_passing_candidate(self):
         negative = self.directory / "regression/defective/result"

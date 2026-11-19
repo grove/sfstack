@@ -15,6 +15,7 @@ precise information, and understanding the design are different activities.
 
 - [Initialize and resume a local quality run](how-to/run-local.md).
 - [Assess a PR with GitHub Actions and Agentic Workflows](how-to/run-github.md).
+- [Turn a GitHub issue into a verified draft PR](how-to/run-software-factory.md).
 - [Select skills and workflows](how-to/select-skills.md).
 - [Connect a coding agent](how-to/connect-agent.md).
 - [Connect an issue tracker](how-to/connect-tracker.md).
