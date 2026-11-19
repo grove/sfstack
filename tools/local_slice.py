@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 import json
-import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -106,7 +106,7 @@ def run_one(workflow_path, run_path, step_id, adapter_script, out_run, artifact_
         # The run file is not overwritten. A new checkpoint is written only
         # after the output has passed evidence and producer validation.
         stage.joinpath("invocation.json").unlink()
-        os.rename(stage, output_dir)
+        shutil.copytree(stage, output_dir)
     updated = deepcopy(run)
     updated.setdefault("completed", {})[step_id] = [
         str((output_dir / "result.json").relative_to(run_dir))

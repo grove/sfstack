@@ -17,6 +17,9 @@ visible; a successful-looking response is not a substitute for a verified result
 
 - **Try one skill:** [Create an outcome brief with your agent](docs/tutorials/first-skill.md).
 - **Try a factory workflow:** [Rehearse an offline factory run](docs/tutorials/factory-rehearsal.md).
+- **Exercise one execution boundary:** [Run a local adapter slice](docs/tutorials/local-slice.md).
+- **Plan evidence freshness:** [Revalidate a changed candidate](docs/how-to/revalidate-evidence.md).
+- **Measure relative value:** [Compare paired agent trials](docs/how-to/compare-trials.md).
 - **Choose the right scope:** [Select skills and workflows](docs/how-to/select-skills.md).
 - **Connect your tools:** [Agent integration](docs/how-to/connect-agent.md) and [tracker integration](docs/how-to/connect-tracker.md).
 - **Explore the library:** [Skill catalog](docs/reference/catalog.md) and [workflow reference](docs/reference/workflows.md).
@@ -37,10 +40,13 @@ and explanation using [Diátaxis](https://diataxis.fr/).
 | Reference tools | `tools/` and `tests/` | Validate the library, inspect readiness, assess gates, and export skills. |
 | Behavioral evaluation | [Seed case and rubric](evals/README.md) | Exercise skills on an isolated coding task and report evidence and limits. |
 
-The reference tools are offline utilities. They do not run a coding agent, issue
-tracker, merge queue, or deployment service. A production controller must provide
-persistence, authentication, isolation, scheduling, and enforcement at the actual
-tool boundary. See [factory architecture](docs/explanation/factory-design.md).
+The reference tools are offline utilities. A [bounded local slice](docs/tutorials/local-slice.md)
+can dispatch a **trusted Python adapter** for a single effect-free skill and
+validate its result, but supplies no sandbox or production tool boundary.
+The library does not supply a live coding agent, tracker, merge queue, or
+deployment service. A production controller must provide persistence,
+authentication, isolation, scheduling, and enforcement at the actual tool
+boundary. See [factory architecture](docs/explanation/factory-design.md).
 
 ## Use a skill
 

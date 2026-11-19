@@ -181,3 +181,32 @@ The tests exercise the implemented validation and reference-tool boundaries.
 They are not a substitute for behavioral evaluations of skill quality or
 qualification of a production adapter. See [evaluate quality](../how-to/evaluate-quality.md)
 and the [contribution guide](../../CONTRIBUTING.md).
+
+## Plan dependency-aware evidence revalidation
+
+```sh
+python tools/evidence_impact.py --manifest examples/evidence-impact.json
+```
+
+This is advisory static analysis only. It identifies changed input digests and
+propagates their effects through declared claim dependencies. A reuse candidate
+is not valid evidence for the new subject; existing gates continue to require
+matching subjects. See [revalidation](../how-to/revalidate-evidence.md).
+
+## Compare paired agent trials
+
+```sh
+python tools/compare_trials.py --input examples/comparative-trials-synthetic.json
+```
+
+Rejects duplicate or unpaired trials, then reports descriptive averages and
+paired differences for bare, instructions-only, and contracts configurations.
+The example data are synthetic and must not be cited as an effectiveness result.
+See [comparative evaluation](../how-to/compare-trials.md).
+
+## Execute one effect-free skill through a local adapter
+
+`tools/local_slice.py` checks readiness, invokes a host-provided Python script,
+validates the returned artifact and evidence, and writes a new checkpoint.
+It is not a sandbox or an external-effect controller. See the
+[local slice tutorial](../tutorials/local-slice.md).

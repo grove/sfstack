@@ -57,3 +57,10 @@ and red/green runner output with documented path normalization. This is an
 observed failure and correction, not a claim that the initial exercise passed
 every dimension. The exercise establishes neither an advantage over an unskilled
 baseline nor compatibility with other agents, trackers, or production systems.
+
+## Comparative results format
+
+Use [the paired-trial comparison guide](../docs/how-to/compare-trials.md)
+to record bare-agent, instructions-only, and contracts-and-gates outcomes on
+the same cases, agent, tools, and environment. The included comparison JSON is
+explicitly synthetic; no comparative experiment has been run by this addition.
