@@ -116,6 +116,31 @@
     },
     "require_independent_review": {
       "type": "boolean"
+    },
+    "required_quality_reports": {
+      "description": "Host-required quality dimensions; task requests may add requirements but cannot remove these.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      }
+    },
+    "quality_imports": {
+      "description": "Host-approved use of an unchanged quality assessment in another run. Subject, age, source evidence, and effect authorization are still checked.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_run_id": {"type": "string", "minLength": 1},
+          "target_run_id": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "expires_at": {"type": "string", "format": "date-time"}
+        },
+        "required": ["source_run_id", "target_run_id", "sha256", "expires_at"],
+        "additionalProperties": false
+      }
     }
   },
   "required": [

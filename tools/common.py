@@ -43,7 +43,7 @@ def read_regular(path, maximum=MAX_FILE_BYTES):
         return data
 
 
-def load_json(path):
+def load_json(path, expected_sha256=None):
 
     def unique_object(pairs):
         result = {}
@@ -53,7 +53,10 @@ def load_json(path):
             result[key] = value
         return result
 
-    return json.loads(read_regular(path).decode('utf-8'), object_pairs_hook=unique_object)
+    raw = read_regular(path)
+    if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+        raise ValueError(f"Evidence digest mismatch: {Path(path).name}")
+    return json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object)
 
 
 def validate_schema(data, name, root=ROOT):
@@ -188,11 +191,130 @@ def workflow_errors(workflow, catalog):
     return errors
 
 
+def finding_cleared(finding, evidence):
+    """A risk label alone is not a resolved finding or an evidenced waiver."""
+    disposition = finding.get("disposition")
+    if not isinstance(disposition, str):
+        return False
+    if disposition in {"resolved", "rejected"}:
+        return True
+    waiver = finding.get("waiver")
+    if disposition != "accepted-risk" or not isinstance(waiver, dict):
+        return False
+    if not all(isinstance(waiver.get(k), str) and waiver[k].strip()
+               for k in ("actor", "decision", "evidence")):
+        return False
+    return evidence.get(waiver["evidence"], {}).get("kind") == "approval"
+
+
+def quality_source_errors(path, artifact, evidence, at, max_age):
+    """Check one level of retained reports; summaries cannot attest to summaries."""
+    prefix, payload = artifact["artifact_id"], artifact["payload"]
+    errors, sources = [], {}
+    if payload["target"]["revision"] != artifact["subject"]["revision"]:
+        errors.append(f"{prefix}: quality target revision differs from its subject.")
+    reported_types = {r["artifact_type"] for r in payload["reports"]
+                      if r["artifact_type"].endswith(("-report", "-assessment"))}
+    if set(payload["coverage"]["evaluated"]) != reported_types:
+        errors.append(f"{prefix}: quality coverage does not match retained reports.")
+    if set(payload["coverage"]["evaluated"]) & set(payload["coverage"]["omitted"]):
+        errors.append(f"{prefix}: evaluated quality coverage is also marked omitted.")
+    severity = {"passed": 0, "inconclusive": 1, "blocked": 2, "failed": 3}
+    for report in payload["reports"]:
+        retained = evidence.get(report["evidence_id"])
+        if retained is None:
+            continue  # The caller reports the missing evidence reference.
+        if report["artifact_type"] == "quality-assessment":
+            errors.append(f"{prefix}: nested quality assessments are not supported.")
+            continue
+        try:
+            source_path = contained_path(path.parent, retained["uri"])
+            source, problems = inspect_artifact(
+                source_path, artifact["subject"], artifact["run_id"], at, max_age,
+                report["artifact_type"], allow_nonpassing=True,
+                expected_sha256=retained["sha256"],
+            )
+            errors.extend(f"{prefix}: retained source: {p}" for p in problems)
+        except (ValueError, OSError) as exc:
+            errors.append(f"{prefix}: retained source unavailable: {exc}")
+            continue
+        if any(source[key] != report[key] for key in ("artifact_id", "artifact_type", "status")):
+            errors.append(f"{prefix}: source metadata differs from retained {report['artifact_type']}.")
+        if source["artifact_type"] == "quality-assessment":
+            continue
+        if source["artifact_id"] in sources:
+            errors.append(f"{prefix}: duplicate quality source artifact id.")
+        sources[source["artifact_id"]] = (source, report)
+        if timestamp(source["created_at"]) > timestamp(artifact["created_at"]):
+            errors.append(f"{prefix}: source report was created after its summary.")
+        if severity[source["status"]] > severity[artifact["status"]]:
+            errors.append(f"{prefix}: summary weakens a non-passing source verdict.")
+
+    findings = payload["findings"]
+    if len({f["id"] for f in findings}) != len(findings):
+        errors.append(f"{prefix}: duplicate quality finding id.")
+    for finding in findings:
+        if finding["source_report"] not in sources:
+            errors.append(f"{prefix}: quality finding has no retained source report.")
+        if not set(finding["evidence"]).issubset(evidence):
+            errors.append(f"{prefix}: quality finding has invalid evidence references.")
+        if (artifact["status"] == "passed" and finding["blocking"]
+                and not finding_cleared(finding, evidence)):
+            errors.append(f"{prefix}: blocking quality finding lacks resolution or an evidenced waiver.")
+
+    for source, report in sources.values():
+        original = source["payload"].get("findings", [])
+        represented = [f for f in findings if f["source_report"] == source["artifact_id"]]
+        if not isinstance(original, list):
+            if artifact["status"] == "passed":
+                errors.append(f"{prefix}: malformed source findings cannot support passing quality.")
+            continue
+        valid_findings = [f for f in original if isinstance(f, dict)
+                          and type(f.get("blocking")) is bool
+                          and isinstance(f.get("disposition"), str)
+                          and f["disposition"] in {"open", "resolved", "rejected", "accepted-risk"}]
+        if len(valid_findings) != len(original) and artifact["status"] == "passed":
+            errors.append(f"{prefix}: malformed source findings cannot support passing quality.")
+        original = valid_findings
+        if len(original) != len(represented):
+            errors.append(f"{prefix}: source findings were omitted or added in the summary.")
+        source_evidence = {e["id"]: e for e in source["evidence"]}
+        for item in original:
+            # IDs may be chosen by a different conforming summarizer. Match the
+            # actual finding meaning and consume each match once instead.
+            match = next((f for f in represented if all(
+                f.get(key) == item[key] for key in
+                ("blocking", "disposition", "severity", "mechanism", "impact", "location")
+                if key in item)), None)
+            if match is None:
+                errors.append(f"{prefix}: source finding meaning changed in the summary.")
+                continue
+            represented.remove(match)
+            refs = match.get("source_evidence", [])
+            if (not isinstance(refs, list) or any(not isinstance(ref, str) for ref in refs)
+                    or not set(refs).issubset(source_evidence)
+                    or refs != item.get("evidence", [])
+                    or report["evidence_id"] not in match["evidence"]):
+                errors.append(f"{prefix}: quality finding lacks matching source evidence.")
+            source_waiver, waiver = item.get("waiver"), match.get("waiver")
+            if source_waiver is not None or waiver is not None:
+                source_ref = source_waiver.get("evidence") if isinstance(source_waiver, dict) else None
+                summary_ref = waiver.get("evidence") if isinstance(waiver, dict) else None
+                original_proof = source_evidence.get(source_ref, {}) if isinstance(source_ref, str) else {}
+                summary_proof = evidence.get(summary_ref, {}) if isinstance(summary_ref, str) else {}
+                if (not isinstance(source_waiver, dict) or not isinstance(waiver, dict)
+                        or any(waiver.get(k) != source_waiver.get(k) for k in ("actor", "decision"))
+                        or not original_proof or not summary_proof
+                        or any(original_proof.get(k) != summary_proof.get(k) for k in ("kind", "sha256"))):
+                    errors.append(f"{prefix}: quality finding waiver differs from retained approval.")
+    return errors
+
+
 def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None,
-                     allow_nonpassing=False):
+                     allow_nonpassing=False, expected_sha256=None):
     """Check a supplied record and the retained local evidence bytes it cites."""
     path = Path(path)
-    artifact = load_json(path)
+    artifact = load_json(path, expected_sha256)
     validate_schema(artifact, "artifact")
     problems = []
     # Validate claim-bearing fields as well as the generic artifact envelope.
@@ -214,6 +336,11 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None,
         problems.append(f"{prefix}: wrong run_id.")
     if expected_type and artifact["artifact_type"] != expected_type:
         problems.append(f"{prefix}: expected {expected_type}, got {artifact['artifact_type']}.")
+        # Source reports may not hide another summary behind a different type.
+        # Return before traversing its sources, keeping validation one level deep.
+        if artifact["artifact_type"] == "quality-assessment":
+            problems.append(f"{prefix}: nested quality assessments are not supported.")
+            return artifact, problems
     age = (at - timestamp(artifact["created_at"])).total_seconds()
     if age < 0:
         problems.append(f"{prefix}: observation is in the future.")
@@ -270,6 +397,7 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None,
         except ValueError:
             pass
         else:
+            problems.extend(quality_source_errors(path, artifact, evidence, at, max_age))
             covered = set(payload["coverage"]["evaluated"])
             required = set(payload["coverage"]["required"])
             reports = {item["artifact_type"]: item for item in payload["reports"]}
@@ -303,13 +431,7 @@ def inspect_artifact(path, subject, run_id, at, max_age, expected_type=None,
                 disposition = finding.get('disposition')
                 if not isinstance(disposition, str) or disposition not in {'open', 'resolved', 'rejected', 'accepted-risk'}:
                     problems.append(f"{prefix}: review finding has an unknown disposition.")
-                if finding['blocking'] and disposition not in ('resolved', 'rejected'):
-                    waiver = finding.get('waiver', {})
-                    waiver_id = waiver.get('evidence') if isinstance(waiver, dict) else None
-                    waiver_evidence = evidence.get(waiver_id) if isinstance(waiver_id, str) else None
-                    valid_waiver = (disposition == 'accepted-risk' and isinstance(waiver, dict)
-                        and all(isinstance(waiver.get(k), str) and waiver[k].strip() for k in ('actor', 'decision', 'evidence'))
-                        and waiver_evidence and waiver_evidence['kind'] == 'approval')
-                    if not valid_waiver and (artifact["status"] == "passed" or not allow_nonpassing):
-                        problems.append(f"{prefix}: unresolved blocking review finding.")
+                if (finding['blocking'] and not finding_cleared(finding, evidence)
+                        and (artifact["status"] == "passed" or not allow_nonpassing)):
+                    problems.append(f"{prefix}: unresolved blocking review finding.")
     return artifact, problems

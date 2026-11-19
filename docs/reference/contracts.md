@@ -136,6 +136,18 @@ operation on its own.
 `require_independent_review` imposes an independence requirement on a supplied
 review; it does not by itself require a review artifact for every effect.
 
+Two optional policy fields support quality composition:
+
+| Field | Meaning |
+| --- | --- |
+| `required_quality_reports` | Unique report types required inside a supplied quality assessment. Consolidation unions these with request/workflow requirements; gates check the evaluated coverage again. `required_artifacts` still determines whether an assessment is required for the effect. |
+| `quality_imports` | Exact host approvals containing `source_run_id`, `target_run_id`, the original assessment file's `sha256`, and `expires_at`. Only unchanged quality assessments can cross runs; original source records, subject, age, verdicts, coverage, and grants remain checked. |
+
+Omitting these fields preserves the existing same-run behavior and adds no quality
+coverage requirements. Existing policies remain valid. Policies using these new
+fields require tools that understand them; older strict validators reject unknown
+fields. See the [composition procedure](../how-to/run-quality.md#4-compose-back-into-software-factory-only-at-an-authorized-boundary).
+
 ## Version and compatibility rules
 
 Skill versions identify behavior; schema versions identify interchange shape.

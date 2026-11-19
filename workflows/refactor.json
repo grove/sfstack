@@ -88,7 +88,8 @@
       "bindings": {
         "change-set": "step:refactor:change-set",
         "specification": "input:specification",
-        "verification-report": "step:verify:verification-report"
+        "verification-report": "step:verify:verification-report",
+        "impact-assessment": "step:impact:impact-assessment"
       }
     },
     {

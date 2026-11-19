@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
 
 from common import (ROOT, contracts, contained_path, inspect_artifact, load_json,
-                    now, timestamp, validate_schema, workflow_errors)
+                    now, read_regular, timestamp, validate_schema, workflow_errors)
 
 def grant_errors(policy, run_id, effect, scope, subject, at):
     if not scope:
@@ -64,6 +65,14 @@ def proof_errors(policy, effect, artifacts):
         if not known or reviewer.strip() == author.strip():
             errors.append("Policy requires an independently identified review.")
     quality = by_type.get("quality-assessment")
+    if quality:
+        coverage = quality["payload"].get("coverage", {})
+        evaluated = coverage.get("evaluated", []) if isinstance(coverage, dict) else []
+        if not isinstance(evaluated, list) or any(not isinstance(item, str) for item in evaluated):
+            evaluated = []
+        missing = set(policy.get("required_quality_reports", [])) - set(evaluated)
+        if missing:
+            errors.append("Quality assessment lacks policy-required reports: " + ", ".join(sorted(missing)))
     if quality and policy["require_independent_review"]:
         independence = quality["payload"].get("independence")
         if not isinstance(independence, dict) or independence.get("established") is not True:
@@ -85,6 +94,33 @@ def proof_errors(policy, effect, artifacts):
     return errors
 
 
+def inspect_proof(path, subject, run_id, at, policy, expected_type=None):
+    """Inspect unchanged cross-run quality proof only when the host pinned its bytes.
+
+    Import approval is part of the trusted policy, not an assertion by a worker.
+    It does not refresh observations, authenticate identities, or grant effects.
+    """
+    record = load_json(path)
+    source_run = record.get("run_id") if isinstance(record, dict) else None
+    if (isinstance(record, dict) and record.get("artifact_type") == "quality-assessment"
+            and source_run != run_id):
+        digest = hashlib.sha256(read_regular(path)).hexdigest()
+        approved = any(item["source_run_id"] == source_run and item["target_run_id"] == run_id
+                       and item["sha256"] == digest and timestamp(item["expires_at"]) > at
+                       for item in policy.get("quality_imports", []))
+        if approved:
+            return inspect_artifact(
+                path, subject, source_run, at, policy["max_evidence_age_seconds"],
+                expected_type, expected_sha256=digest,
+            )
+        artifact, errors = inspect_artifact(
+            path, subject, run_id, at, policy["max_evidence_age_seconds"], expected_type,
+        )
+        errors.append("Cross-run quality assessment needs an unexpired, hash-pinned host import approval.")
+        return artifact, errors
+    return inspect_artifact(path, subject, run_id, at, policy["max_evidence_age_seconds"], expected_type)
+
+
 def evaluate_gate(request_path, policy_path, at):
     request_path, policy_path = Path(request_path), Path(policy_path)
     request, policy = load_json(request_path), load_json(policy_path)
@@ -94,8 +130,7 @@ def evaluate_gate(request_path, policy_path, at):
     artifacts = []
     for relative in request["artifacts"]:
         artifact_path = contained_path(request_path.parent, relative)
-        artifact, problems = inspect_artifact(artifact_path, request["subject"], request["run_id"], at,
-                                              policy["max_evidence_age_seconds"])
+        artifact, problems = inspect_proof(artifact_path, request["subject"], request["run_id"], at, policy)
         artifacts.append(artifact)
         reasons.extend(problems)
     reasons.extend(proof_errors(policy, request["effect"], artifacts))
@@ -132,8 +167,8 @@ def plan(workflow_path, run_path, at, root=ROOT):
         if kind not in run["inputs"]:
             input_errors[kind] = [f"Missing workflow input {kind}."]
             continue
-        artifact, problems = inspect_artifact(contained_path(run_dir, run["inputs"][kind]),
-            run["subject"], run["run_id"], at, policy["max_evidence_age_seconds"], kind)
+        artifact, problems = inspect_proof(contained_path(run_dir, run["inputs"][kind]),
+            run["subject"], run["run_id"], at, policy, kind)
         inputs[kind], input_errors[kind] = artifact, problems
     completed, blocked, outputs, ready = set(), {}, {}, []
     pending = list(steps)

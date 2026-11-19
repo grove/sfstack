@@ -51,6 +51,19 @@ passing quality report must include passing verification and review evidence,
 plus passing evidence for every selected required dimension. Negative source
 statuses cannot be repackaged into a passing quality result.
 
+The checker opens each retained source report and validates the same bytes named
+by its evidence digest. Its artifact ID, type, status, run, subject, age, checks,
+and evidence must agree with the summary. The target revision must match the
+envelope, and evaluated coverage must match the retained assessment/report types.
+A summary cannot weaken a source verdict, drop or downgrade a source finding,
+or replace an approval with an unevidenced risk label. Consolidation preserves
+finding locations, source evidence references, and waivers; copied approval
+references resolve within the new bundle. Nested quality summaries are rejected,
+so inspection has one bounded level of source reports.
+
+These are consistency checks, not producer authentication. A host must still
+establish who performed the checks and who had authority to accept a risk.
+
 ## Evidence record
 
 Each evidence record has:

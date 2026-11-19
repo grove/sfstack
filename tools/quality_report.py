@@ -100,12 +100,12 @@ def consolidate(workflow_path, run_path, output_dir, at, out_run=None, root=ROOT
     if not isinstance(specified, list) or any(not isinstance(x, str) for x in specified):
         raise ValueError("required_assessments must be a list of artifact types.")
     selected = sorted(k for k in sources if k.endswith("-report") or k.endswith("-assessment"))
-    required = sorted(set(selected) | set(specified))
+    required = sorted(set(selected) | set(specified) | set(policy.get("required_quality_reports", [])))
     missing = sorted(set(required) - set(selected))
     statuses = {kind: sources[kind][0]["status"] for kind in selected}
     problems = []
     if missing:
-        problems.append("Requested quality dimensions have no selected workflow node: " + ", ".join(missing))
+        problems.append("Required quality dimensions have no selected workflow node: " + ", ".join(missing))
     if not selected:
         raise ValueError("No quality reports were selected.")
     review = sources["review-report"][0]
@@ -122,13 +122,18 @@ def consolidate(workflow_path, run_path, output_dir, at, out_run=None, root=ROOT
     findings, recommendations = [], []
     for kind in selected:
         source = sources[kind][0]
-        for item in source["payload"].get("findings", []):
-            if not isinstance(item, dict) or not isinstance(item.get("blocking"), bool) or item.get("disposition") not in {
-                "open", "resolved", "rejected", "accepted-risk"
-            }:
+        source_findings = source["payload"].get("findings", [])
+        if not isinstance(source_findings, list):
+            problems.append(f"{kind} contains findings that are not an array.")
+            source_findings = []
+        for item in source_findings:
+            if (not isinstance(item, dict) or not isinstance(item.get("blocking"), bool)
+                    or not isinstance(item.get("disposition"), str)
+                    or item["disposition"] not in {"open", "resolved", "rejected", "accepted-risk"}):
                 problems.append(f"{kind} contains findings that cannot be normalized safely.")
                 continue
-            findings.append({
+            normalized = deepcopy(item)
+            normalized.update({
                 "id": f"{kind}-{item.get('id', len(findings) + 1)}",
                 "source_report": source["artifact_id"],
                 "blocking": item["blocking"],
@@ -139,6 +144,9 @@ def consolidate(workflow_path, run_path, output_dir, at, out_run=None, root=ROOT
                 "evidence": [f"report-{kind}"],
                 "source_evidence": item.get("evidence", []),
             })
+            if isinstance(normalized.get("waiver"), dict) and isinstance(normalized["waiver"].get("evidence"), str):
+                normalized["waiver"]["evidence"] = f"support-{kind}-{normalized['waiver']['evidence']}"
+            findings.append(normalized)
         recommendations.extend(source["unresolved"])
         if source["next_action"] != "none":
             recommendations.append(source["next_action"])
@@ -239,7 +247,9 @@ def consolidate(workflow_path, run_path, output_dir, at, out_run=None, root=ROOT
             "summary": f"Quality assessment {overall} for {target_kind} at the fixed candidate.",
             "evidence": evidence, "checks": checks,
             "unresolved": limitations, "next_action": (
-                "Resolve findings and obtain separate remediation authorization." if overall != "passed" else "none"
+                "Review retained failures and plan separately authorized remediation." if overall == "failed"
+                else "Resolve the listed evidence, coverage, or independence gaps and reassess." if overall != "passed"
+                else "none"
             ),
             "payload": payload,
         }
