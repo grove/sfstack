@@ -390,6 +390,8 @@ class GitHubWorkflowBoundaryTests(unittest.TestCase):
         self.assertIn("quality.py verify", jobs["verify"])
         self.assertRegex(jobs["quality_gate"], r"(?m)^    if: always\(\) && needs.start_check.outputs.eligible == 'true'\s*$")
         self.assertIn("quality.py finalize", jobs["quality_gate"])
+        self.assertIn("automation.py snapshot", jobs["quality_gate"])
+        self.assertNotIn('gh api "repos/$GITHUB_REPOSITORY/pulls', jobs["quality_gate"])
         self.assertRegex(jobs["publish"], r"(?m)^    if: always\(\)\s*$")
 
     def test_all_metadata_writers_share_a_serial_lock_and_never_checkout_candidates(self):

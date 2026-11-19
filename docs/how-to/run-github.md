@@ -70,7 +70,19 @@ cannot become an implicit pass. A valid negative verification report is retained
 and passed through review and consolidation, so failed tests remain evidence.
 
 When `main` advances, the coordinator queues fresh assessments for open
-same-repository PRs targeting it. Queuing replaces any previous result on the
+same-repository PRs targeting it. GitHub may continue to report an older
+`pull_request.base.sha` even after that branch advances: sfstack resolves the
+current default-branch ref separately, preserves the API-reported base SHA as
+`base.reported_sha` in its normalized PR snapshot, and pins the live ref as
+the actual assessment base. The final quality gate refreshes that same ref and
+rejects genuine head or branch-tip changes.
+
+GitHub may also omit the PR association from an authenticated `workflow_run`
+event. The coordinator then finds an unambiguous same-repository open PR by
+matching both the signal's exact head SHA and branch name against GitHub's
+current pull request data; ambiguous matches cannot dispatch.
+
+ Queuing replaces any previous result on the
 same PR head with a pending check. The controller pins the PR head, current base,
 and current default-branch policy revision. It rechecks these identities before
 publishing success. Superseded runs may finish, but cannot overwrite a check

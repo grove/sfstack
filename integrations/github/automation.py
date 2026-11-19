@@ -8,6 +8,7 @@ agent output never execute here. This host uses only the Python standard library
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -212,6 +213,14 @@ class Host:
             raise ValueError("Only open same-repository PRs targeting the default branch are eligible.")
         return pr
 
+    @staticmethod
+    def with_current_base(pr, branch_tip):
+        """Pin the live default-branch ref, not GitHub's historical PR base.sha."""
+        selected = deepcopy(pr)
+        selected["base"]["reported_sha"] = pr["base"]["sha"]
+        selected["base"]["sha"] = branch_tip
+        return selected
+
     def find_check(self, pr):
         checks = self.pages("commits/" + pr["head"]["sha"] + "/check-runs?"
                             + urlencode({"check_name": CHECK_NAME, "filter": "all"}), "check_runs")
@@ -256,18 +265,35 @@ class Host:
                     or source.get("head_sha") != trigger.get("head_sha")):
                 return {"dispatched": [], "reason": "Stale signal attempt."}
             associated = source.get("pull_requests", [])
-            if len(associated) != 1:
-                return {"dispatched": [], "reason": "PR signal has no unambiguous GitHub PR association."}
-            pr = self.pr(associated[0]["number"], branch)
-            if pr["head"]["sha"] != source.get("head_sha"):
+            if not isinstance(associated, list):
+                return {"dispatched": [], "reason": "Malformed PR signal associations."}
+            if len(associated) == 1:
+                numbers = [associated[0].get("number")]
+            elif not associated:
+                # GitHub can return an empty pull_requests array for an actual
+                # pull_request workflow run. Reconcile against current API PRs;
+                # the authenticated signal's exact head and branch must match
+                # one and only one eligible same-repository PR.
+                candidates = self.pages("pulls?" + urlencode({"state": "open", "base": branch}))
+                numbers = [candidate["number"] for candidate in candidates
+                           if candidate.get("head", {}).get("sha") == source.get("head_sha")
+                           and candidate.get("head", {}).get("ref") == source.get("head_branch")
+                           and candidate.get("head", {}).get("repo", {}).get("full_name", "").lower() == self.repository.lower()]
+            else:
+                return {"dispatched": [], "reason": "Ambiguous PR signal associations."}
+            if len(numbers) != 1 or not positive(numbers[0]):
+                return {"dispatched": [], "reason": "PR signal cannot identify one current PR."}
+            pr = self.pr(numbers[0], branch)
+            if (pr["head"]["sha"] != source.get("head_sha")
+                    or pr["head"].get("ref") != source.get("head_branch")):
                 return {"dispatched": [], "reason": "PR advanced after the signal."}
             numbers = [pr["number"]]
         dispatched = []
         request_id = f"{self.run_id}-{self.attempt}"
         for number in numbers:
             pr = self.pr(number, branch)
-            if pr["base"]["sha"] != tip:
-                raise ValueError("PR base does not match the current default branch.")
+            # A PR's base.sha may remain at the commit when it was opened.
+            # The live default-branch ref is the authoritative assessment base.
             check = self.find_check(pr)
             previous = check_owner(check) if check else None
             if previous and previous["b"] == tip and (previous["i"], previous["a"]) >= (self.run_id, self.attempt):
@@ -301,7 +327,7 @@ class Host:
         if not title or int(title[1]) != pr["number"] or title[2] != (request_id or "manual"):
             raise ValueError("Run title does not match its dispatch identity.")
         tip = self.default_sha(branch)
-        if (tip != self.context["workflow_sha"] or pr["base"]["sha"] != tip
+        if (tip != self.context["workflow_sha"]
                 or (expected_head and (pr["head"]["sha"] != expected_head or tip != expected_base))):
             return {"eligible": False, "reason": "Head, base, or controller policy advanced; dispatch a fresh assessment."}
         check = self.find_check(pr)
@@ -319,9 +345,20 @@ class Host:
                        "head_repository": self.repository, "controller_sha": self.context["workflow_sha"],
                        "run_id": self.run_id, "run_attempt": self.attempt, "check_id": check["id"],
                        "owner": identity}
-        return {"eligible": True, "publication": publication, "pr": pr,
+        return {"eligible": True, "publication": publication,
+                "pr": self.with_current_base(pr, tip),
                 "head_sha": publication["head_sha"], "base_sha": tip,
                 "pr_number": pr["number"], "check_id": check["id"]}
+
+    def snapshot(self, pr_number):
+        """Refresh identity for sfstack finalization using the live default ref."""
+        repository, _ = self.trusted_context(QUALITY, {"workflow_dispatch"})
+        branch = repository["default_branch"]
+        pr = self.pr(pr_number, branch)
+        tip = self.default_sha(branch)
+        if tip != self.context["workflow_sha"]:
+            raise ValueError("Controller policy advanced during this assessment.")
+        return self.with_current_base(pr, tip)
 
     def validate_result(self, publication, result_dir):
         result_dir = Path(result_dir)
@@ -399,8 +436,9 @@ class Host:
             if gate_result != "success":
                 raise ValueError("The trusted quality gate did not succeed: " + str(gate_result))
             pr = self.pr(publication["pull_request"], repository["default_branch"])
-            if (pr["head"]["sha"] != publication["head_sha"] or pr["base"]["sha"] != publication["base_sha"]
-                    or self.default_sha(repository["default_branch"]) != publication["controller_sha"]):
+            if (pr["head"]["sha"] != publication["head_sha"]
+                    or self.default_sha(repository["default_branch"]) != publication["controller_sha"]
+                    or publication["base_sha"] != publication["controller_sha"]):
                 raise ValueError("The PR head, base, or controller policy advanced before publication.")
             artifact = self.validate_result(publication, result_dir)
             conclusion, reason = "success", "Both required reports passed and the trusted sfstack quality gate accepted their evidence."
@@ -486,6 +524,9 @@ def main(argv=None):
     for name in ("expected-head", "expected-base", "request-id"):
         start.add_argument("--" + name, default="")
     start.add_argument("--out", required=True)
+    snapshot = commands.add_parser("snapshot")
+    snapshot.add_argument("--pr-number", required=True, type=int)
+    snapshot.add_argument("--out", required=True)
     publish = commands.add_parser("publish")
     for name in ("publication", "result", "gate-result", "out"):
         publish.add_argument("--" + name, required=True)
@@ -507,6 +548,12 @@ def main(argv=None):
                         if key in result:
                             output.write(f"{key}={result[key]}\n")
             result = {key: value for key, value in result.items() if key not in {"publication", "pr"}}
+        elif args.command == "snapshot":
+            current = host.snapshot(args.pr_number)
+            write_json(args.out, current)
+            result = {"pull_request": current["number"],
+                      "head_sha": current["head"]["sha"],
+                      "base_sha": current["base"]["sha"]}
         elif args.command == "publish":
             try:
                 publication, _ = read_json(args.publication)
