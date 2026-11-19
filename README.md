@@ -88,8 +88,9 @@ results, and save a checkpoint after each step. A
 [reference unittest adapter](examples/adapters/README.md) executes real checks
 on pinned candidates. These tools supply no sandbox or production tool boundary.
 The optional GitHub integration connects Copilot through Agentic Workflows for
-automated review. It uses a manually dispatched Actions gate and grants no merge
-authority; independent human approval remains separate. The library does not
+automatic review of same-repository PRs and publishes an evidence-backed quality
+check on the reviewed commit. Manual dispatch remains available. The integration
+grants no merge authority; independent human approval remains separate. The library does not
 supply a tracker, merge queue, or deployment service. A production controller must provide persistence,
 authentication, isolation, scheduling, and enforcement at the actual tool
 boundary. See [factory architecture](docs/explanation/factory-design.md).
