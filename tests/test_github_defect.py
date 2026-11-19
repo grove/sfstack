@@ -79,7 +79,7 @@ class DefectRepairTests(SoftwareFixture):
         return software.prepare(**parameters)
 
     def propose(self, source=None, regression=REGRESSION_TEST, diagnosis=DIAGNOSIS):
-        context = self.directory / "defect-context"
+        context = self.directory / ("defect-context-" + self.bundle.name)
         software.render(self.bundle, self.repo, context, at=self.at)
         invocation = (context / "invocation.md").read_text(encoding="utf-8")
         self.assertIn("sf-diagnose-defect", invocation)
