@@ -49,6 +49,11 @@ safe-outputs:
           required: true
           type: string
           max-length: 100000
+        change_sha256:
+          description: Exact lowercase SHA-256 of the preflight-checked UTF-8 change_json bytes.
+          required: true
+          type: string
+          max-length: 64
       steps:
         - name: Retain change submission
           run: |
@@ -118,7 +123,16 @@ Perform the bounded `sf-build-change` invocation in
    The host validates permitted paths, applies the proposal to a fresh checkout,
    and runs verification independently. Your local edits and test claims are
    supporting evidence; they cannot directly publish or clear a quality gate.
-7. Call `submit_change` exactly once with the response JSON in `change_json`.
+7. Run the rendered agent-side JSON preflight on the **exact** raw UTF-8
+   `change_json` file. Supply its printed SHA-256 hex digest separately as
+   `change_sha256` in the **same** `submit_change` call. Supply `change_json`
+   from the unchanged checked file bytes; do not retype, reformat, or transform
+   the submitted JSON after hashing. For example, within the permitted local
+   tooling: `safeoutputs submit_change --change_json . --change_sha256 <digest>`
+   with the raw file piped on standard input. A digest mismatch after the
+   safe-output sanitizer is a **hard negative**: do not attempt to reconstruct,
+   decrypt, encode around, undo, or disable redaction. The trusted verifier
+   separately compares the received bytes **before running any candidate code**.
    Do not include Markdown fences around the JSON. Submit a negative response
    when appropriate rather than a no-op. Do not push branches, open or update
    issues or PRs, merge, deploy, send messages, or attempt credential access.
