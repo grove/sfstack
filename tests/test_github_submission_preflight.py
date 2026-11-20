@@ -37,8 +37,9 @@ class SubmissionPreflightTests(SoftwareFixture):
         self.assertNotIn("Advisory limitation stated once.", result.stderr)
 
         # Exact host transport remains fail-closed, with no candidate applied.
+        (self.submission.parent / "proposal.json").write_text(duplicate, encoding="utf-8")
         self.write(self.submission, {"items": [
-            {"type": "submit_change", "change_json": duplicate,
+            {"type": "submit_change",
              "change_sha256": hashlib.sha256(duplicate.encode("utf-8")).hexdigest()}]})
         with self.assertRaisesRegex(ValueError, "Duplicate JSON key"):
             self.verify()
