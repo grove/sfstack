@@ -770,6 +770,18 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
             self.publish()
         self.assertEqual([], self.api.mutations)
 
+    def test_retained_proposal_bytes_cannot_change_between_verifier_and_publisher(self):
+        self.prepared_host()
+        evidence = self.result / "proposal.json"
+        original = evidence.read_bytes()
+        self.assertIn("proposal.json", load_json(self.result / "gate.json")["digests"])
+        evidence.write_bytes(original + b"\n")
+        with self.assertRaisesRegex(ValueError, "Build gate is negative"):
+            self.publish()
+        self.assertEqual([], self.api.mutations)
+        evidence.write_bytes(original)
+        self.assertTrue(self.publish()["published"])
+
     def test_modified_host_log_cannot_be_republished_as_passing_proof(self):
         self.prepared_host()
         log = self.result / "logs/answer-behavior.txt"
