@@ -196,58 +196,58 @@ them in the change-set and draft PR but does **not** treat them as verified
 claims. Actual unmet criteria always require a nonpassing result; never move
 blockers into `limitations` to clear a gate.
 
-For each \`submit_change\` submission, Copilot must construct **one dictionary**
-from the rendered \`change-template.json\`, update existing keys (including the
-already-present \`limitations\` list), and serialize it **once** to the fixed
-file \`/tmp/gh-aw/agent/sfstack-software/proposal.json\`. Concatenating JSON
-can create duplicate keys; plain \`json.loads\` silently discards them and is
+For each `submit_change` submission, Copilot must construct **one dictionary**
+from the rendered `change-template.json`, update existing keys (including the
+already-present `limitations` list), and serialize it **once** to the fixed
+file `/tmp/gh-aw/agent/sfstack-software/proposal.json`. Concatenating JSON
+can create duplicate keys; plain `json.loads` silently discards them and is
 **not** a safe validator. Before submitting, the agent runs the preflight on
 this exact file in its GitHub Actions workspace:
 
-\`\`\`sh
+```sh
 mkdir -p /tmp/gh-aw/agent/sfstack-software
 python controller/integrations/github/preflight_change.py \
   --proposal /tmp/gh-aw/agent/sfstack-software/proposal.json \
   --schema /tmp/gh-aw/sfstack-software/context/change.schema.json \
   --template /tmp/gh-aw/sfstack-software/context/change-template.json
-\`\`\`
+```
 
 If preflight fails, the agent corrects its source object, writes a new file
-and rechecks. When it passes, the agent calls \`submit_change\` **once**, with
-the \`change_sha256\` field set to the printed lowercase SHA-256 digest.
+and rechecks. When it passes, the agent calls `submit_change` **once**, with
+the `change_sha256` field set to the printed lowercase SHA-256 digest.
 **No source-code JSON goes into any safe-output text input.** That text
 channel can apply URL-protocol sanitization and corrupt escaped code.
 
 ### Compiler-redacted agent-file transport (issue #20)
 
 gh-aw's **pinned v1.2.2 compiler** documents the custom-job
-[\`artifacts:\` declaration](https://github.github.com/gh-aw/reference/custom-safe-outputs/#depending-on-agent-job-files).
-The authored \`sfstack-build.md\` declares exactly
-\`/tmp/gh-aw/agent/sfstack-software/proposal.json\`. The **agent** job
+[`artifacts:` declaration](https://github.github.com/gh-aw/reference/custom-safe-outputs/#depending-on-agent-job-files).
+The authored `sfstack-build.md` declares exactly
+`/tmp/gh-aw/agent/sfstack-software/proposal.json`. The **agent** job
 automatically includes that file in its managed Actions artifact **after its
-mandatory secret-redaction pass and threat detection**; unsuccessful redaction
-fails closed and prevents upload. The read-only custom \`submit-change\` job
+mandatory secret-redaction pass**; unsuccessful redaction
+fails closed and prevents upload. The read-only custom `submit-change` job
 downloads the declared artifact and stages the fixed source path (never an
 agent-selected path) next to the structured safe-output receipt. The
-\`sfstack-agent-change-<attempt>\` artifact therefore contains:
+`sfstack-agent-change-<attempt>` artifact therefore contains:
 
-- \`submission.json\`: sanitized safe-output metadata, with one \`submit_change\`
-  item and the \`change_sha256\` checksum but **no inline source**.
-- \`proposal.json\`: the compiler-redacted exact UTF-8 source proposal.
+- `submission.json`: sanitized safe-output metadata, with one `submit_change`
+  item and the `change_sha256` checksum but **no inline source**.
+- `proposal.json`: the compiler-redacted exact UTF-8 source proposal.
 
 The fresh **trusted verifier** re-reads both bounded regular files. Before
 parsing the proposal, creating a candidate tree, or running any candidate test,
-it checks SHA-256 of the **received** \`proposal.json\` against the agent's
+it checks SHA-256 of the **received** `proposal.json` against the agent's
 preflight receipt. A missing file, duplicate key, extra output, wrong identity,
 mismatched checksum, or modified file fails closed. The successful verifier
-retains *both* files and their hashes in its \`gate.json\`; the credentialed
+retains *both* files and their hashes in its `gate.json`; the credentialed
 publisher recomputes those hashes and revalidates the source against the
 pinned issue, paths, RED/GREEN evidence, and complete suite before publishing
 a **draft**.
 
 The prior text safe-output channel was intentionally lossy. The fourth
 [issue #15 run 44705187658](https://github.com/grove/sfstack/actions/runs/44705187658)
-had three escaped newline sequences turned into \`(n/redacted)\`. The
+had three escaped newline sequences turned into `(n/redacted)`. The
 pinned gh-aw [URL-protocol sanitizer](https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/sanitize_content_core.cjs)
 emits this style of marker, although the precise invocation in the historical
 run has not been separately reproduced. The new file-artifact transport
