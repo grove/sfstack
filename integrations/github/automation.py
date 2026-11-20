@@ -108,9 +108,28 @@ class GitHubAPI:
         return self.request("PATCH", path, body)
 
 
-def owner(pr, base, kind, identifier, attempt, request_id, generation=1):
-    return {"v": 3, "g": generation, "p": pr, "b": base, "k": kind, "i": identifier,
-            "a": attempt, "q": request_id or "manual"}
+def pr_intent_digest(pr):
+    """Bind a quality verdict to the title and acceptance intent reviewed.
+
+    Draft/ready state is deliberately excluded: making an otherwise unchanged
+    PR ready for review cannot invalidate a completed, current quality pass.
+    """
+    title, body = pr.get("title") or "", pr.get("body") or ""
+    if not isinstance(title, str) or not isinstance(body, str):
+        raise ValueError("PR acceptance intent must contain text.")
+    raw = json.dumps({"title": title, "body": body},
+                     ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def owner(pr, base, kind, identifier, attempt, request_id, generation=1, intent=None):
+    identity = {"v": 3, "g": generation, "p": pr, "b": base, "k": kind, "i": identifier,
+                "a": attempt, "q": request_id or "manual"}
+    if intent is not None:
+        if not isinstance(intent, str) or SHA.fullmatch(intent) is None:
+            raise ValueError("Invalid pinned PR acceptance-intent digest.")
+        identity["t"] = intent
+    return identity
 
 
 def owner_text(value):
@@ -123,8 +142,12 @@ def check_owner(check):
     try:
         value = strict_json(check.get("external_id", ""))
         fields = {"v", "p", "b", "k", "i", "a", "q"}
+        v3_fields = fields | {"g"}
         if (not isinstance(value, dict) or not ((value.get("v") == 2 and set(value) == fields)
-                 or (value.get("v") == 3 and set(value) == fields | {"g"} and positive(value["g"])))
+                 or (value.get("v") == 3
+                     and set(value) in (v3_fields, v3_fields | {"t"})
+                     and positive(value["g"])
+                     and ("t" not in value or isinstance(value["t"], str) and SHA.fullmatch(value["t"]))))
                 or not all(positive(value[key]) for key in ("p", "i", "a"))
                 or value["k"] not in {"request", "run", "stale"} or not SHA.fullmatch(value["b"])
                 or not (value["q"] == "manual" or REQUEST_ID.fullmatch(value["q"]))):
@@ -305,7 +328,8 @@ class Host:
                 # Already negative: repeated base pushes need no check writes.
                 continue
             identity = owner(pr["number"], tip, "stale", self.run_id, self.attempt,
-                             "manual", previous.get("g", 0) + 1)
+                             "manual", previous.get("g", 0) + 1,
+                             intent=previous.get("t"))
             self.replace_check(
                 pr, check, identity, "completed", "Base changed - quality revalidation required",
                 f"PR #{pr['number']} head {pr['head']['sha']} was previously assessed "
@@ -369,8 +393,19 @@ class Host:
             previous = check_owner(check) if check else None
             if previous and previous["b"] == tip and (previous["i"], previous["a"]) >= (self.run_id, self.attempt):
                 continue
+            intent = pr_intent_digest(pr)
+            # Reuse ONLY a completed, host-owned, successful check for this
+            # exact PR head (find_check), live base/policy, and reviewed title
+            # and body. Older checks without a pinned intent never qualify.
+            # Failed, stale, queued and unfinished assessments may be retried.
+            # Explicit manual workflow_dispatch bypasses this coordinator.
+            if (previous and previous["k"] == "run" and previous["b"] == tip
+                    and previous.get("t") == intent
+                    and check.get("status") == "completed"
+                    and check.get("conclusion") == "success"):
+                continue
             identity = owner(number, tip, "request", self.run_id, self.attempt, request_id,
-                             (previous or {}).get("g", 0) + 1)
+                             (previous or {}).get("g", 0) + 1, intent=intent)
             check = self.replace_check(pr, check, identity, "queued", "Quality assessment queued",
                                       f"PR #{number} at `{pr['head']['sha']}` will be assessed against base `{tip}`.\n\n"
                                       "The previous result cannot approve this request.")
@@ -415,7 +450,8 @@ class Host:
         handoff = previous and previous["k"] == "request" and previous["q"] == request_id
         reuse = (same_attempt or handoff) and check.get("status") in {"queued", "in_progress"} and previous.get("v") == 3
         generation = (previous or {}).get("g", 0) + (0 if reuse else 1)
-        identity = owner(pr["number"], tip, "run", self.run_id, self.attempt, request_id, generation)
+        identity = owner(pr["number"], tip, "run", self.run_id, self.attempt,
+                         request_id, generation, intent=pr_intent_digest(pr))
         writer = self.update_check if reuse else self.replace_check
         check = writer(pr, check, identity, "in_progress", "Assessing the pinned PR head",
                                   f"Candidate `{pr['head']['sha']}`; base `{tip}`; attempt {self.attempt}.\n\n"
@@ -572,7 +608,7 @@ class Host:
         reuse = ((queued_request or (same_run and identity["a"] == run["run_attempt"]))
                  and check.get("status") in {"queued", "in_progress"} and identity.get("v") == 3)
         updated = owner(pr["number"], identity["b"], "run", run["id"], run["run_attempt"], title[2],
-                        identity.get("g", 0) + (0 if reuse else 1))
+                        identity.get("g", 0) + (0 if reuse else 1), intent=identity.get("t"))
         writer = self.update_check if reuse else self.replace_check
         url = f"https://github.com/{self.repository}/actions/runs/{run['id']}"
         if in_progress:
