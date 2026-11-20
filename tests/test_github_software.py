@@ -583,6 +583,7 @@ class SoftwareGitHub:
     def get(self, path):
         self.calls.append(("GET", path, None))
         parsed = urlsplit(path)
+        page = int(parse_qs(parsed.query).get("page", ["1"])[0])
         prefix = "repos/fixture/software"
         if not parsed.path.startswith(prefix):
             raise AssertionError("Unexpected repository: " + path)
