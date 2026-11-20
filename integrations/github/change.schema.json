@@ -101,7 +101,8 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 2000
-      }
+      },
+      "description": "Unmet acceptance criteria or implementation blockers only. A passing submission MUST have an empty list; any item blocks draft PR publication, even if the agent labels it advisory."
     },
     "edits": {
       "type": "array",
@@ -201,6 +202,16 @@
             "maxLength": 2000
           }
         }
+      }
+    },
+    "limitations": {
+      "description": "Optional non-blocking cautions and residual risks for the human/Quality Factory reviewers. Does not replace remaining_work, does not grant authorization, and cannot excuse unmet acceptance criteria.",
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
       }
     }
   }

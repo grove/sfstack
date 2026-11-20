@@ -269,6 +269,58 @@ class GitHubSoftwareTests(SoftwareFixture):
                     self.verify()
                 self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
 
+    def test_actual_pilot_advisory_remaining_work_still_blocks_publication(self):
+        """Run #44689746001: passed agent with nonempty work must fail closed."""
+        self.prepare()
+        response = self.response(remaining_work=[
+            "A stronger policy could be considered separately.",
+            "Independent verification and human PR review remain necessary.",
+        ])
+        with self.assertRaisesRegex(ValueError, "Passing build lacks complete criteria"):
+            self.verify()
+        self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
+        self.assertEqual("", self.git("status", "--porcelain"))
+        self.assertFalse((self.result / "candidate.json").exists())
+        self.assertEqual("passed", response["status"])
+
+    def test_optional_limitations_are_retained_but_require_independent_checks(self):
+        self.prepare()
+        context = self.directory / "context"
+        software.render(self.bundle, self.repo, context, at=self.at)
+        instructions = (context / "invocation.md").read_text(encoding="utf-8")
+        self.assertIn("remaining_work=[]", instructions)
+        self.assertIn("non-blocking residual risks", instructions)
+        response = load_json(context / "change-template.json")
+        self.assertEqual([], response["limitations"])
+        response.update({
+            "status": "passed", "summary": "Repair a bounded behavior.",
+            "criteria_addressed": ["acceptance-1"], "behavior_changes": ["Answer is 42."],
+            "checks_run": [{"command": "python -m unittest", "observed": "Builder claim only."}],
+            "remaining_work": [],
+            "limitations": ["The quality reviewer must still inspect the scope.",
+                            "More hardening may be useful outside this issue."],
+            "edits": [{"path": "examples/answer.py", "content": "answer = 42" + chr(10)}],
+        })
+        self.submit(response)
+        gate = self.verify()
+        self.assertTrue(gate["passed"])
+        change = load_json(self.result / "change-set.json")
+        self.assertEqual(response["limitations"], change["payload"]["builder_limitations"])
+        summary = (self.result / "summary.md").read_text()
+        self.assertIn("More hardening may be useful outside this issue.", summary)
+        self.assertEqual("passed", load_json(self.result / "verification-report.json")["status"])
+
+    def test_limitations_cannot_smuggle_authority_or_unbounded_text(self):
+        self.prepare()
+        response = self.response()
+        for value in ("review later", ["x" * 2001],
+                      [{"grant": "contents:write"}]):
+            with self.subTest(value=value):
+                self.submit({**response, "limitations": value})
+                with self.assertRaisesRegex(ValueError, "closed schema"):
+                    self.verify()
+                self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
+
     def test_unknown_response_authority_field_is_rejected(self):
         self.prepare()
         response = self.response()
@@ -538,9 +590,9 @@ class SoftwareGitHub:
 
 
 class GitHubSoftwarePublicationTests(SoftwareFixture):
-    def prepared_host(self, value=42):
+    def prepared_host(self, value=42, **response_updates):
         self.prepare()
-        self.response(value=value)
+        self.response(value=value, **response_updates)
         self.verify()
         candidate = load_json(self.result / "candidate.json")
         self.api = SoftwareGitHub(self.base, self.issue, candidate)
@@ -588,6 +640,20 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
             "pr-number": "21", "expected-head": candidate["head_sha"], "expected-base": self.base,
         }}, dispatch)
         self.assertFalse(any("merge" in path for _, path, _ in self.api.mutations))
+
+    def test_builder_limitations_survive_into_the_draft_pr_without_approval(self):
+        candidate = self.prepared_host(limitations=[
+            "Future hardening outside this issue may be needed.",
+            "Independent human review is still required.",
+        ])
+        published = self.publish()
+        self.assertTrue(published["draft"])
+        self.assertTrue(published["quality_requested"])
+        self.assertFalse(published["merge_authorized"])
+        body = self.api.pulls[0]["body"]
+        self.assertIn("Builder-reported limitations (unverified)", body)
+        self.assertIn("Future hardening outside this issue may be needed.", body)
+        self.assertEqual(candidate["head_sha"], published["candidate_sha"])
 
     def test_negative_host_verification_never_creates_remote_objects_or_refs(self):
         self.prepared_host(value=99)
