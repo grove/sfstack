@@ -97,6 +97,8 @@ def main():
         rejected("executed check")
     with edit_json(REQUEST, lambda a: a.update(scope="repository:other/change:42")):
         rejected("authorization")
+    with edit_json(REQUEST, lambda a: a.update(effect="release.publish")):
+        rejected("authorization")
     with edit_json(REQUEST, lambda a: a["artifacts"].remove("records/review-report.json")):
         rejected("Missing required review-report")
     with edit_json(REVIEW, lambda a: a.pop("schema_version")):
