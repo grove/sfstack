@@ -380,7 +380,7 @@ class GitHubSoftwareTests(SoftwareFixture):
                 else:
                     corrupted["items"][0]["change_sha256"] = digest
                 self.write(self.submission, corrupted)
-                with self.assertRaisesRegex(ValueError, "SHA-256|Safe-output transport|change_sha256"):
+                with self.assertRaisesRegex(ValueError, "SHA-256|proposal artifact changed|change_sha256"):
                     software.load_response(self.submission, load_json(self.bundle / "run.json"),
                                            load_json(self.bundle / "target.json"))
                 self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
