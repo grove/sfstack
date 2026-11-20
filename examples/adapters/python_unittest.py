@@ -21,13 +21,16 @@ WORKER_ENV_NAMES = frozenset({
     "PATH", "HOME", "USERPROFILE", "LANG", "LANGUAGE", "TZ", "TMPDIR", "TEMP", "TMP",
     "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "VIRTUAL_ENV", "LD_LIBRARY_PATH",
 })
-WORKER_ENV_PREFIXES = ("LC_", "PYTHON")
+WORKER_ENV_PREFIXES = ("LC_",)
+# Explicit interpreter text/encoding settings only; no PYTHON* prefix, PYTHONPATH or PYTHONSTARTUP.
+WORKER_PYTHON_ENV_NAMES = frozenset({"PYTHONIOENCODING", "PYTHONUTF8"})
 
 
 def worker_environment():
     """Pass candidate tests only non-credential process basics, never the host's secrets."""
     env = {name: value for name, value in os.environ.items()
-           if name in WORKER_ENV_NAMES or name.startswith(WORKER_ENV_PREFIXES)}
+           if name in WORKER_ENV_NAMES or name in WORKER_PYTHON_ENV_NAMES
+           or name.startswith(WORKER_ENV_PREFIXES)}
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     return env
 
