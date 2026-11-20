@@ -64,10 +64,26 @@ eligibility checks resolve the actual default branch through GitHub's API.
 
 Opening, reopening, updating, editing, or marking an eligible PR ready for review
 starts a small **sfstack PR signal** workflow. The trusted **sfstack quality
-events** coordinator resolves the current PR through GitHub's API, queues its
-check, and dispatches **sfstack GitHub quality** from the default branch.
-Editing a PR's title or description can therefore cause another review even when
-its head SHA has not changed.
+events** coordinator resolves the current PR through GitHub's API. Before
+dispatching **sfstack GitHub quality** from the default branch, it checks the
+latest trusted quality result on that PR head.
+
+A **completed passing** result is reused when all of these are unchanged:
+the PR head commit, the current default-branch tip (which pins controller
+policy), and the reviewed PR **title and body**. The host stores a SHA-256
+fingerprint of the title and body in the quality check's trusted identity.
+Changing only the draft/ready status does not change those reviewed inputs,
+so `ready_for_review` does **not** start a second AI assessment when the
+existing check already passed. The original passing check and evidence remain
+current and are not superseded. Older checks without a pinned fingerprint,
+failed or incomplete results, and changed PR titles/descriptions cannot be
+reused; those signals still request a full review.
+
+The coordinator does **not** suppress an explicit maintainer-triggered
+[manual assessment](#run-or-retry-manually), even on an unchanged successful
+head. The manually requested run acquires fresh evidence and supersedes the
+previous clearance. Deduplication never authorizes a merge or substitutes
+agent claims for the trusted quality gate.
 
 The PR's **`sfstack quality`** check shows queued or running while assessment is
 in progress. Its final details identify the candidate and base commits, the
@@ -112,8 +128,9 @@ event. The coordinator then finds an unambiguous same-repository open PR by
 matching both the signal's exact head SHA and branch name against GitHub's
 current pull request data; ambiguous matches cannot dispatch.
 
-Queued **PR-signal or explicit manual assessments** revoke any previous result
-on the same head and create a fresh pending check. A base-push invalidation
+New **PR-signal or explicit manual assessments** revoke any previous result
+on the same head and create a fresh pending check. A repeated PR signal for
+an identical completed pass makes no check writes and starts no assessment. A base-push invalidation
 instead creates a **completed failing check** without starting an assessment.
 Both paths use monotonically increasing check generations; the previous check
 becomes a historical **Quality assessment superseded** failure with its
@@ -341,9 +358,14 @@ validation passes. Use an open same-repository PR or create a disposable pilot P
    owned checks close as failures. Retry through **Re-run all jobs** or a fresh
    manual dispatch.
 5. Reassess the unchanged head after a completed failure and after a completed
-   success. Confirm each new assessment creates a new check ID, retires the
-   prior result, and publishes its own verdict. A green controller that leaves
-   an older failed check as the current result is not a successful retry.
+   success via an **explicit manual dispatch**. Confirm each manual assessment
+   creates a new check ID, retires the prior result, and publishes its own
+   verdict. Separately issue a `ready_for_review` PR signal on an unchanged
+   successful head/base/title/body and confirm that **no** new quality
+   assessment starts or passing check gets superseded. Change the PR's title or
+   acceptance description and confirm automatic reassessment resumes. A green
+   controller that leaves an older failed check as the current result is not a
+   successful retry.
 6. Enable the required check and strict up-to-date rule after reviewing those
    results. A normal later `main` push exercises base-change reassessment.
 

@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "evals"))
 from integrations.github.automation import (CHECK_NAME, EVENTS, QUALITY, SIGNAL,
-                                            Host, check_owner, owner, owner_text)
+                                            Host, check_owner, owner, owner_text,
+                                            pr_intent_digest)
 from run_github_regression import run_regression
 
 REPOSITORY = "fixture/inventory"
@@ -150,7 +151,8 @@ class GitHubAutomationTests(unittest.TestCase):
         self.assertEqual(HEAD, check["head_sha"])
         self.assertEqual("in_progress", check["status"])
         self.assertEqual(CHECK_NAME, check["name"])
-        self.assertEqual(owner(1, BASE, "run", 100, 1, ""), check_owner(check))
+        self.assertEqual(owner(1, BASE, "run", 100, 1, "",
+                               intent=pr_intent_digest(self.api.pulls[1])), check_owner(check))
         self.assertEqual(BASE, publication["controller_sha"])
 
     def test_current_base_snapshot_replaces_stale_pr_base_without_mutating_api(self):
@@ -255,6 +257,7 @@ class GitHubAutomationTests(unittest.TestCase):
         legacy = check_owner(self.check(publication))
         legacy["v"] = 2
         legacy.pop("g")
+        legacy.pop("t", None)
         self.check(publication).update({"external_id": owner_text(legacy),
                                         "status": "completed", "conclusion": "success"})
         current = self.start(self.new_host(101))
@@ -444,6 +447,121 @@ class GitHubAutomationTests(unittest.TestCase):
         writes = len(self.api.mutations)
         self.assertEqual([], coordinator.dispatch(event)["dispatched"])
         self.assertEqual(writes, len(self.api.mutations))
+
+    def passing_auto_check(self):
+        """Exercise coordinator -> controller handoff before reporting success."""
+        coordinator, signal, event = self.signal()
+        self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
+        controller = self.new_host(201, title="sfstack quality / PR #1 / request 200-1")
+        prepared = controller.start(1, HEAD, BASE, "200-1")
+        self.assertTrue(prepared["eligible"])
+        current = self.check(prepared["publication"])
+        self.assertEqual(pr_intent_digest(self.api.pulls[1]), check_owner(current)["t"])
+        current.update({"status": "completed", "conclusion": "success"})
+        return current, event
+
+    def test_ready_for_review_does_not_repeat_completed_identical_pass(self):
+        """PR #21 regression: one more signal must not invalidate green CI."""
+        current, event = self.passing_auto_check()
+        next_coordinator = self.new_host(202, EVENTS, "workflow_run")
+        changes = len(self.api.mutations)
+        self.assertEqual([], next_coordinator.dispatch(event)["dispatched"])
+        self.assertEqual(changes, len(self.api.mutations))
+        self.assertEqual("success", current["conclusion"])
+        self.assertEqual(current["id"], next_coordinator.find_check(self.api.pulls[1])["id"])
+        self.assertFalse(any(path.endswith("/dispatches")
+                             for _, path, _ in self.api.mutations[changes:]))
+
+    def test_changed_title_or_body_forces_reassessment_on_unchanged_sha(self):
+        for field in ("title", "body"):
+            with self.subTest(field=field):
+                self.api = FakeGitHub()
+                previous, event = self.passing_auto_check()
+                old_id = previous["id"]
+                self.api.pulls[1][field] = "Updated acceptance intent" if field == "body" else "Updated review title"
+                coordinator = self.new_host(202, EVENTS, "workflow_run")
+                self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
+                current = coordinator.find_check(self.api.pulls[1])
+                self.assertNotEqual(old_id, current["id"])
+                self.assertEqual("failure", previous["conclusion"])
+                self.assertEqual("queued", current["status"])
+                self.assertEqual(pr_intent_digest(self.api.pulls[1]), check_owner(current)["t"])
+
+    def test_no_dedupe_for_missing_digest_failed_or_unfinished_check(self):
+        for variant in ("legacy", "failed", "in_progress"):
+            with self.subTest(variant=variant):
+                self.api = FakeGitHub()
+                previous, event = self.passing_auto_check()
+                if variant == "legacy":
+                    older = check_owner(previous)
+                    older.pop("t")
+                    previous["external_id"] = owner_text(older)
+                else:
+                    previous["status"] = "completed" if variant == "failed" else "in_progress"
+                    previous["conclusion"] = "failure" if variant == "failed" else None
+                coordinator = self.new_host(202, EVENTS, "workflow_run")
+                self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
+                current = coordinator.find_check(self.api.pulls[1])
+                self.assertEqual("queued", current["status"])
+                self.assertEqual("failure", previous["conclusion"])
+
+    def test_new_head_or_base_cannot_reuse_success(self):
+        for field in ("head", "base"):
+            with self.subTest(field=field):
+                self.api = FakeGitHub()
+                old, event = self.passing_auto_check()
+                coordinator = self.new_host(202, EVENTS, "workflow_run")
+                if field == "head":
+                    updated = "c" * 40
+                    self.api.pulls[1]["head"]["sha"] = updated
+                    run = self.api.add_run(92, SIGNAL, "pull_request", status="completed", head=updated)
+                    run["head_branch"] = "candidate"
+                    run["pull_requests"] = [{"number": 1}]
+                    event = {"action": "completed", "workflow_run": deepcopy(run)}
+                else:
+                    self.api.tip = "d" * 40
+                    coordinator = self.new_host(202, EVENTS, "workflow_run", head=self.api.tip)
+                self.assertEqual([1] if field == "head" else [1],
+                                 coordinator.dispatch(event)["dispatched"])
+                newest = coordinator.find_check(self.api.pulls[1])
+                self.assertNotEqual(old["id"], newest["id"])
+                self.assertEqual("queued", newest["status"])
+
+    def test_manual_reassessment_of_unchanged_pass_is_still_allowed(self):
+        publication = self.start()
+        original = self.check(publication)
+        original.update({"status": "completed", "conclusion": "success"})
+        manual = self.new_host(101)
+        next_publication = manual.start(1)["publication"]
+        self.assertNotEqual(original["id"], next_publication["check_id"])
+        self.assertEqual("failure", original["conclusion"])
+        self.assertEqual("in_progress", self.check(next_publication)["status"])
+
+    def test_malformed_intent_fingerprint_cannot_be_trusted_for_deduplication(self):
+        for bad in ("1" * 63, "bad", None, {"untrusted": True}):
+            with self.subTest(fingerprint=bad):
+                self.api = FakeGitHub()
+                previous, event = self.passing_auto_check()
+                value = check_owner(previous)
+                if bad is None:
+                    value.pop("t")
+                else:
+                    value["t"] = bad
+                previous["external_id"] = owner_text(value)
+                if bad is not None:
+                    self.assertIsNone(check_owner(previous))
+                    # A malformed check cannot be treated as a successful pass;
+                    # ignore it without editing or invalidating its result.
+                    coordinator = self.new_host(202, EVENTS, "workflow_run")
+                    writes = len(self.api.mutations)
+                    self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
+                    self.assertEqual("success", previous["conclusion"])
+                    self.assertEqual("queued", coordinator.find_check(self.api.pulls[1])["status"])
+                    self.assertGreater(len(self.api.mutations), writes)
+                else:
+                    self.assertNotIn("t", check_owner(previous))
+                    coordinator = self.new_host(202, EVENTS, "workflow_run")
+                    self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
 
     def test_base_push_invalidates_success_without_dispatching_expensive_review(self):
         publication = self.start()
