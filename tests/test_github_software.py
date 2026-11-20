@@ -680,7 +680,7 @@ class SoftwareGitHub:
         if suffix == "/actions/workflows/sfstack-quality.yml/dispatches":
             if self.fail_dispatch:
                 raise ValueError("Fixture quality dispatch is unavailable.")
-            identifier = max(self.quality_runs, default=900) + 1
+            identifier = max(self.quality_runs, default=2000) + 1
             request = body["inputs"]
             self.quality_runs[identifier] = {
                 "id": identifier, "run_attempt": 1, "workflow_id": self.quality_workflow["id"],
