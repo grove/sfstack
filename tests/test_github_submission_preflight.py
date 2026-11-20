@@ -125,5 +125,5 @@ class SubmissionPreflightTests(SoftwareFixture):
         self.assertIn("ALREADY has a `limitations` property", guidance)
         self.assertIn("Duplicate keys, including nested ones", guidance)
         self.assertIn("json.dumps", guidance)
-        self.assertIn("Submit exactly the validated file contents", guidance)
+        self.assertIn("Do not submit the source JSON as a safe-output string", guidance)
         self.assertIn("Quality Factory, and human approval", guidance)
