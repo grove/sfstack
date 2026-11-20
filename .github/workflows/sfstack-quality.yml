@@ -1,0 +1,33 @@
+name: sfstack GitHub quality (manual via factory)
+
+# Manual-only pilot. This exact filename and run-name are authenticated by
+# the factory publisher against the caller's GitHub Actions run.
+# Do not add PR triggers or permit a PR to select its own controller revision.
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: Open sfstack pull request number to assess
+        required: true
+        type: number
+
+run-name: "sfstack quality / PR #${{ inputs.pr-number }} / request manual"
+
+# This is the upper bound on the called workflow's job permissions.
+# The candidate and Copilot review never receive a PR/check write token.
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+  checks: write
+
+jobs:
+  quality:
+    name: Run pinned factory Quality
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # SHA pinned to the reviewed factory reusable workflow, never @main/@latest.
+    uses: grove/factory/.github/workflows/sfstack-quality.yml@3921ac399844641976bacfc68385c3f3907491d2
+    with:
+      pr-number: ${{ inputs.pr-number }}
+    secrets:
+      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
