@@ -1,0 +1,13 @@
+{
+  "allowed_paths": [
+    "tests/fixtures/issue29-recovery-20261120.json"
+  ],
+  "fixture_check": "self-consistency-only",
+  "issue": 29,
+  "not_factory_evidence": true,
+  "pinned_base_sha": "7a4b56b4d1e34db124743d39fd694f2cd88463ea",
+  "run_attempt": 1,
+  "run_id": "issue29-live-recovery-20261120",
+  "schema": "sfstack.live-recovery-probe.v1",
+  "scope": "synthetic Git ref crash replay only; no agent, PR, quality assessment, merge, or deployment"
+}
