@@ -209,8 +209,20 @@ mkdir -p /tmp/gh-aw/agent/sfstack-software
 python controller/integrations/github/preflight_change.py \
   --proposal /tmp/gh-aw/agent/sfstack-software/proposal.json \
   --schema /tmp/gh-aw/sfstack-software/context/change.schema.json \
-  --template /tmp/gh-aw/sfstack-software/context/change-template.json
+  --template /tmp/gh-aw/sfstack-software/context/change-template.json \
+  --specification /tmp/gh-aw/sfstack-software/inputs/specification.json
 ```
+
+The host also assigns authoritative acceptance IDs in
+`inputs/specification.json` under `payload.criteria[].id` (such as
+`acceptance-1`, `acceptance-2`, and `acceptance-3`). The agent must copy
+these **exact IDs** into `criteria_addressed`, rather than inventing
+`criterion-1` or similar labels. For a passing response the list must cover
+every pinned criterion; a nonpassing response may name a subset. Preflight
+compares the IDs and binds the specification to the same run and subject.
+These checks run even when the isolated agent lacks the optional
+`jsonschema` package. The trusted host independently rechecks the same
+acceptance scope; preflight is only a convenience, never authorization.
 
 If preflight fails, the agent corrects its source object, writes a new file
 and rechecks. When it passes, the agent calls `submit_change` **once**, with
@@ -394,6 +406,7 @@ or merges anything. Never paste a token value into an issue, input, log, or PR.
 | Verification passes but no draft PR appears, and the publication step reports a permission error creating a pull request. | **Allow GitHub Actions to create and approve pull requests** is disabled for the repository, or an organization policy prevents it. | A repository administrator can enable the setting in **Settings → Actions → General → Workflow permissions**, subject to organization policy; it applies to workflows in this repository. The workflow creates only drafts and never approves or merges. Inspect existing drafts, then re-run the same attempt if the inputs are unchanged or dispatch a new run. See [Enable the integration](#enable-the-integration). |
 | A draft exists but there is no `sfstack quality` result. | The explicit quality dispatch failed. | Run **sfstack GitHub quality** for that PR using the [quality retry instructions](run-github.md#run-or-retry-manually). |
 | The agent job is green but the verification job says `Passing build lacks complete criteria, behavioral checks, or a complete bounded change.` | The structured `submit_change` can claim `status=passed` while listing unfinished `remaining_work` (or omitting actual checks/edits). Advisory risks and mandatory downstream review should instead be disclosed in `limitations`. | Inspect `sfstack-agent-change-<attempt>` and `sfstack-software-result-<attempt>`. Do not suppress nonempty `remaining_work` or publish; if the controller was updated, dispatch a new run from current `main`. |
+| The verifier rejects `Unknown acceptance criterion in the agent response.` before RED/GREEN (e.g. [issue #26 run 44760120706](https://github.com/grove/sfstack/actions/runs/44760120706)). | The builder invented `criterion-1` etc. instead of the pinned `acceptance-1` etc. IDs. Preflight previously checked JSON shape but not membership in the host's specification. | Preserve the negative gate; do not rename or reinterpret the old proposal as passing. Use the exact IDs from the current `inputs/specification.json`, run the specification-bound preflight, and only then submit the immutable file. The host still rejects mismatched IDs. Never skip RED/GREEN or replay this failed attempt as successful. |
 | The host rejects `Duplicate JSON key.` | The agent produced ambiguous raw `proposal.json` with a repeated field such as `limitations`. Ordinary JSON decoding can hide this error by keeping only the final value. | Inspect the declared proposal artifact without normalizing it. Correct the source object and rerun preflight on the raw file; do not relax strict parsing or replay rejected evidence. |
 | Verification stops with `Agent proposal artifact changed after preflight`, or the declared file is missing. | The compiler-redacted artifact bytes differ from the preflight checksum, possibly because secret masking was necessary; the job cannot safely read the fixed artifact, or the receipt is invalid. | Preserve negative evidence. Inspect only hashes and approved paths, never credentials; do not reconstruct masked bytes, disable redaction, or replay rejected artifacts. Fix legitimate proposal content or use a human-authorized development workflow. |
 | Verified candidate branch exists, but draft publisher logs `unsupported operand type(s) for /: 'str' and 'str'`. | The publisher used a CLI string as a `Path` (fixed by [PR #24](https://github.com/grove/sfstack/pull/24)). | Keep the passing run artifacts and immutable candidate branch. Use a separately reviewed recovery draft on the current base; do not rerun Copilot to fix a publisher-only type error. |
