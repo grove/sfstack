@@ -299,7 +299,8 @@ def render(bundle, candidate, output, at=None):
         "python controller/integrations/github/preflight_change.py "
         "--proposal /tmp/gh-aw/agent/sfstack-software/proposal.json "
         "--schema /tmp/gh-aw/sfstack-software/context/change.schema.json "
-        "--template /tmp/gh-aw/sfstack-software/context/change-template.json\n"
+        "--template /tmp/gh-aw/sfstack-software/context/change-template.json "
+        "--specification /tmp/gh-aw/sfstack-software/inputs/specification.json\n"
         "```\n"
         "If it fails, revise the response object, regenerate the file and "
         "rerun preflight; never submit malformed or ambiguous payloads. "
@@ -314,6 +315,18 @@ def render(bundle, candidate, output, at=None):
         "BEFORE candidate execution. Never undo, evade, or disable redaction. "
         "Independent host parsing, tests, Quality Factory, and human approval "
         "remain mandatory.\n"
+    )
+    guidance += (
+        "\n# Mandatory pinned acceptance-criterion IDs\n\n"
+        "The host, not the agent, assigns acceptance-criterion IDs. Read the "
+        "exact IDs in /tmp/gh-aw/sfstack-software/inputs/specification.json "
+        "under payload.criteria[].id. Put those same IDs in the response "
+        "criteria_addressed list; never invent criterion-1 or rename IDs. "
+        "A passed proposal must address ALL pinned IDs, and a nonpassing "
+        "proposal may name only IDs truly addressed. The separate agent-side "
+        "preflight checks the IDs against this pinned specification, while "
+        "the trusted host independently rechecks them before candidate execution. "
+        f"Exact IDs for this run: {', '.join(item['id'] for item in target['criteria'])}.\n"
     )
     invocation = render_skill("sf-build-change", context) + guidance
     if target["mode"] == "defect":

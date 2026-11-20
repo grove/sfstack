@@ -28,13 +28,14 @@ except ImportError:
 import automation
 
 
-def check(proposal, schema, template):
+def check(proposal, schema, template, specification):
     # Use the SAME strict parser as the host, including for nested objects.
     # An ordinary json.loads + json.dumps round trip silently discards
     # duplicate properties and must never be used to "repair" invalid input.
     response, raw = automation.read_json(proposal)
     expected, _ = automation.read_json(template)
     contract, _ = automation.read_json(schema)
+    pinned, _ = automation.read_json(specification)
     if not isinstance(response, dict):
         raise ValueError("The raw change_json must be one JSON object.")
     if not isinstance(contract, dict) or not isinstance(contract.get("properties"), dict):
@@ -53,6 +54,27 @@ def check(proposal, schema, template):
                              + " (" + str(first.validator) + ").")
     if response["run_id"] != expected["run_id"] or response["subject"] != expected["subject"]:
         raise ValueError("Proposal run_id or subject differs from the pinned template.")
+    if (not isinstance(pinned, dict) or pinned.get("artifact_type") != "specification"
+            or pinned.get("run_id") != expected["run_id"]
+            or pinned.get("subject") != expected["subject"]):
+        raise ValueError("Specification run or subject differs from the pinned template.")
+    criteria = pinned.get("payload", {}).get("criteria")
+    if (not isinstance(criteria, list) or not 1 <= len(criteria) <= 8
+            or any(not isinstance(item, dict) or not isinstance(item.get("id"), str)
+                   or not item["id"] for item in criteria)):
+        raise ValueError("Pinned specification lacks bounded acceptance IDs.")
+    accepted = {item["id"] for item in criteria}
+    if len(accepted) != len(criteria):
+        raise ValueError("Pinned specification repeats an acceptance ID.")
+    claimed = response.get("criteria_addressed")
+    if (not isinstance(claimed, list)
+            or any(not isinstance(item, str) for item in claimed)
+            or len(set(claimed)) != len(claimed)):
+        raise ValueError("Proposal acceptance IDs must be a unique list.")
+    if not set(claimed).issubset(accepted):
+        raise ValueError("Unknown acceptance criterion ID; copy exact IDs from the pinned specification.")
+    if response.get("status") == "passed" and set(claimed) != accepted:
+        raise ValueError("Passing proposal must address all pinned acceptance IDs.")
     if response["status"] == "passed" and (response["remaining_work"]
                                           or not response["criteria_addressed"]
                                           or not response["behavior_changes"]
@@ -68,12 +90,14 @@ def main(argv=None):
                         help="Exact raw proposal.json bytes for the declared, redacted agent artifact")
     parser.add_argument("--schema", required=True, type=Path)
     parser.add_argument("--template", required=True, type=Path)
+    parser.add_argument("--specification", required=True, type=Path,
+                        help="Host-prepared specification.json with exact acceptance IDs")
     args = parser.parse_args(argv)
     try:
-        checksum = check(args.proposal, args.schema, args.template)
+        checksum = check(args.proposal, args.schema, args.template, args.specification)
     except (OSError, ValueError, TypeError, KeyError, SchemaError, UnicodeError, json.JSONDecodeError) as exc:
         parser.exit(1, "sfstack submission preflight: " + str(exc).splitlines()[0][:400] + "\n")
-    print("sfstack submission preflight: OK (unique JSON keys, allowed fields, pinned identity).")
+    print("sfstack submission preflight: OK (unique JSON keys, pinned identity and acceptance IDs).")
     if Draft202012Validator is None:
         print("Full schema validation deferred: jsonschema unavailable to the agent; host validation remains required.")
     else:
