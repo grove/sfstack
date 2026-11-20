@@ -21,11 +21,11 @@ class WithContracts(build_py):
 
 setup(
     name="sfstack-contracts",
-    version="1.0.0",
-    description="Versioned offline sfstack contract, artifact and gate CLI",
+    version="1.1.0",
+    description="Versioned offline sfstack contract, artifact, assessment and gate CLI",
     python_requires=">=3.11",
     install_requires=["jsonschema>=4.23,<5"],
-    py_modules=["common", "factory", "contract_cli"],
+    py_modules=["common", "factory", "contract_cli", "quality_report", "render_invocation"],
     packages=["sfstack_contracts_data"],
     package_dir={"": "tools", "sfstack_contracts_data": "sfstack_contracts_data"},
     entry_points={"console_scripts": ["sfstack-contract=contract_cli:main"]},

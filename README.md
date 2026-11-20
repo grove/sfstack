@@ -22,7 +22,10 @@ available in its environment. Missing capabilities and incomplete evidence remai
 visible; a successful-looking response is not a substitute for a verified result.
 
 
-The [versioned public contract/gate CLI](docs/reference/public-cli.md) provides a read-only, pinned-distribution boundary for future independent hosts. It is not a GitHub controller or a migration of the workflows.
+The [versioned public contract CLI](docs/reference/public-cli.md) provides the
+pinned distribution boundary used by independent hosts. The GitHub Software
+Factory and Quality Factory are maintained in
+[`grove/factory`](https://github.com/grove/factory).
 
 ## Start here
 
@@ -82,7 +85,7 @@ compatibility. A trusted adapter supplies the actual work; the
 | Workflows | JSON recipes in `workflows/` | Named dependency graphs with explicit artifact bindings. |
 | Schemas and examples | `schemas/`, `examples/` | Validate interchange records and demonstrate integration boundaries. |
 | Adapter contracts | `adapters/` | Separate neutral skill behavior from environment-specific tool calls. |
-| GitHub integration | [Quality Factory](docs/how-to/run-github.md) and [Software Factory](docs/how-to/run-software-factory.md) | Build a scoped issue into a draft PR, then assess the pinned candidate through real verification, review, and deterministic quality/effect gates. |
+| External GitHub host | [`grove/factory`](https://github.com/grove/factory) | Owns GitHub events, credentials, candidate execution, draft publication, and quality checks; consumes sfstack through the pinned public CLI. |
 | Reference tools | `tools/` and `tests/` | Validate the library, inspect readiness, assess gates, and export skills. |
 | Behavioral evaluation | [Seed case and rubric](evals/README.md) | Exercise skills on an isolated coding task and report evidence and limits. |
 
@@ -91,10 +94,10 @@ can dispatch **trusted Python adapters** for effect-free skills, validate their
 results, and save a checkpoint after each step. A
 [reference unittest adapter](examples/adapters/README.md) executes real checks
 on pinned candidates. These tools supply no sandbox or production tool boundary.
-The optional GitHub integration connects Copilot through Agentic Workflows for
-automatic review of same-repository PRs and publishes an evidence-backed quality
-check on the reviewed commit. Manual dispatch remains available. The integration
-grants no merge authority; independent human approval remains separate. The library does not
+The separate [factory host](https://github.com/grove/factory) connects Copilot
+through Agentic Workflows, publishes evidence-backed checks, and builds bounded
+changes into draft pull requests. Its GitHub workflows and operational tests
+are maintained there. Independent human approval remains separate. The library does not
 supply a tracker, merge queue, or deployment service. A production controller must provide persistence,
 authentication, isolation, scheduling, and enforcement at the actual tool
 boundary. See [factory architecture](docs/explanation/factory-design.md).
