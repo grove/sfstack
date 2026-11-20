@@ -81,11 +81,15 @@ def red_assertion(result, log):
             or result["tests_run"] < 1 or result["tests_skipped"] or result["expected_failures"]):
         return False
     text = read_regular(log).decode("utf-8", "replace")
-    summaries = re.findall(r"^FAILED \(([^\r\n)]*)\)$", text, re.MULTILINE)
-    if len(summaries) != 1:
+    # Nested unittests may print their own failed summaries *inside* a
+    # legitimate assertion failure. Only the outer runner's final summary,
+    # anchored at the end of the log, proves the RED outcome and test count.
+    terminal = quality.terminal_unittest_summary(text)
+    if (terminal is None or terminal[0] != result["tests_run"] or terminal[1] != "FAILED"):
         return False
-    failures = re.findall(r"\bfailures=(\d+)", summaries[0])
-    errors = re.findall(r"\berrors=(\d+)", summaries[0])
+    details = terminal[2]
+    failures = re.findall(r"\bfailures=(\d+)", details)
+    errors = re.findall(r"\berrors=(\d+)", details)
     return len(failures) == 1 and int(failures[0]) > 0 and (not errors or int(errors[0]) == 0)
 
 
@@ -113,7 +117,7 @@ def reproduce(repo, target, response, output):
     software.git(repo, "reset", "--mixed", red_candidate["head_sha"])
     quality.check_candidate(repo, red_candidate["head_sha"])
     log = output / "logs/red-regression.txt"
-    report["red"] = quality.run_check(check(target), repo, log)
+    report["red"] = quality.run_check(check(target), repo, log, nested_unittest=True)
     quality.check_candidate(repo, red_candidate["head_sha"])
     software.git(repo, "reset", "--hard", target["base_sha"])
     quality.check_candidate(repo, target["base_sha"])
@@ -127,7 +131,7 @@ def reproduce(repo, target, response, output):
 
 def green(repo, target, candidate, output):
     log = output / "logs/green-regression.txt"
-    result = quality.run_check(check(target), repo, log)
+    result = quality.run_check(check(target), repo, log, nested_unittest=True)
     quality.check_candidate(repo, candidate["head_sha"])
     return result
 
