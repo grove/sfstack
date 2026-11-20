@@ -17,6 +17,21 @@ import subprocess
 import sys
 import unittest
 
+WORKER_ENV_NAMES = frozenset({
+    "PATH", "HOME", "USERPROFILE", "LANG", "LANGUAGE", "TZ", "TMPDIR", "TEMP", "TMP",
+    "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "VIRTUAL_ENV", "LD_LIBRARY_PATH",
+})
+WORKER_ENV_PREFIXES = ("LC_", "PYTHON")
+
+
+def worker_environment():
+    """Pass candidate tests only non-credential process basics, never the host's secrets."""
+    env = {name: value for name, value in os.environ.items()
+           if name in WORKER_ENV_NAMES or name.startswith(WORKER_ENV_PREFIXES)}
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return env
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 from common import contained_path, load_json, read_regular
@@ -152,7 +167,7 @@ def verify(invocation_path, output_path):
                  str(candidate), str(tests), str(counts)],
                 cwd=candidate, stdout=stdout, stderr=stderr,
                 timeout=timeout, check=False,
-                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                env=worker_environment(),
             )
         except subprocess.TimeoutExpired:
             timed_out = True
