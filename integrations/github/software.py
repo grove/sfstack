@@ -603,6 +603,8 @@ class SoftwareHost(automation.Host):
                         or selected["kind"] == "unittest" and (type(observed.get("tests_run")) is not int
                             or observed["tests_run"] < 1 or observed.get("tests_skipped") != 0 or observed.get("expected_failures") != 0)):
                     problems.append("Verification lacks a substantive passing host check.")
+        if change["payload"].get("builder_limitations", []) != response.get("limitations", []):
+            problems.append("Builder limitations differ from the validated agent submission.")
         if target["mode"] == "defect":
             defect.validate_evidence(repo, target, candidate, response, result, run, at, MAX_AGE)
         if problems:
@@ -646,12 +648,13 @@ class SoftwareHost(automation.Host):
         evidence_url = f"https://github.com/{self.repository}/actions/runs/{self.run_id}/artifacts/{artifact['id']}"
         title = f"[sfstack] {target['issue']['title']}"[:240]
         defect_record = load_json(result / "defect-evidence.json") if target["mode"] == "defect" else None
+        builder_limitations = load_json(result / "change-set.json")["payload"].get("builder_limitations", [])
         body = "\n".join([
             f"Implements the selected increment from #{target['issue']['number']}.", "",
             "## Acceptance criteria", "", *[f"- {c['description']}" for c in target['criteria']], "",
             *(defect.pr_section(target, defect_record) if defect_record else []),
-            *(["## Builder-reported limitations (unverified)", "", *[f"- {item}" for item in response["limitations"]], ""]
-              if response.get("limitations") else []),
+            *(["## Builder-reported limitations (unverified)", "", *[f"- {item}" for item in builder_limitations], ""]
+              if builder_limitations else []),
             "## Evidence", "", f"- [Build evidence and retained host logs]({evidence_url})",
             f"- Base: `{target['base_sha']}`", f"- Verified candidate: `{candidate['head_sha']}`", "",
             "Created by sfstack's bounded Software Factory. Local verification passed. A separate Quality Factory assessment is requested for this exact head.",
