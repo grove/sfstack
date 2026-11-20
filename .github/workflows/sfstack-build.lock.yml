@@ -700,7 +700,7 @@ jobs:
         env:
           GH_AW_FILE_ROOT: "${{ runner.temp }}/gh-aw"
           GH_AW_FILE_CONFIG: "{\"files\":[{\"path\":\"safeoutputs/config.json\",\"content_env\":\"GH_AW_SAFE_OUTPUTS_CONFIG\"}]}"
-          GH_AW_SAFE_OUTPUTS_CONFIG: "{\"noop\":{\"max\":2,\"report-as-issue\":\"false\"},\"report_incomplete\":{},\"report_missing_data\":{},\"report_missing_tool\":{},\"submit-change\":{\"description\":\"Submit exactly one bounded change proposal as JSON for independent host verification.\",\"inputs\":{\"change_json\":{\"default\":null,\"description\":\"JSON response matching context/change.schema.json, not Markdown.\",\"maxLength\":100000,\"required\":true,\"type\":\"string\"}},\"supports_dependencies\":false}}"
+          GH_AW_SAFE_OUTPUTS_CONFIG: "{\"noop\":{\"max\":2,\"report-as-issue\":\"false\"},\"report_incomplete\":{},\"report_missing_data\":{},\"report_missing_tool\":{},\"submit-change\":{\"description\":\"Submit exactly one bounded change proposal as JSON for independent host verification.\",\"inputs\":{\"change_json\":{\"default\":null,\"description\":\"JSON response matching context/change.schema.json, not Markdown.\",\"maxLength\":100000,\"required\":true,\"type\":\"string\"},\"change_sha256\":{\"default\":null,\"description\":\"Exact lowercase SHA-256 of the preflight-checked UTF-8 change_json bytes.\",\"maxLength\":64,\"required\":true,\"type\":\"string\"}},\"supports_dependencies\":false}}"
         with:
           script: |
             const path = require('path');
@@ -725,10 +725,16 @@ jobs:
                         "description": "JSON response matching context/change.schema.json, not Markdown.",
                         "maxLength": 100000,
                         "type": "string"
+                      },
+                      "change_sha256": {
+                        "description": "Exact lowercase SHA-256 of the preflight-checked UTF-8 change_json bytes.",
+                        "maxLength": 64,
+                        "type": "string"
                       }
                     },
                     "required": [
-                      "change_json"
+                      "change_json",
+                      "change_sha256"
                     ],
                     "type": "object"
                   },
