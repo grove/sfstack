@@ -686,6 +686,124 @@ class SoftwareHost(automation.Host):
             raise ValueError("Current-attempt build evidence artifact is unavailable.")
         return target, candidate, matches[0]
 
+
+    def quality_run(self, request_id, pull, target, run_id=None, attempt=None):
+        """Read a pinned, GitHub-owned Quality dispatch without creating effects.
+
+        Dispatch returns HTTP 204 and no run id. Replaying it on a timeout can
+        start a second controller. Find the durable run or block; no absence
+        check can prove that an asynchronous dispatch was never accepted.
+        """
+        expected_title = f"sfstack quality / PR #{pull['number']} / request {request_id}"
+        if run_id is None:
+            runs = self.pages("actions/workflows/" + automation.QUALITY
+                              + "/runs?event=workflow_dispatch", "workflow_runs")
+            matches = [run for run in runs if run.get("display_title") == expected_title]
+        else:
+            matches = [self.api.get(self.path(f"actions/runs/{run_id}"))]
+        if len(matches) > 1:
+            raise ValueError("Multiple Quality Factory runs claim the same request; human reconciliation required.")
+        if not matches:
+            return None
+        run = matches[0]
+        self.validate_run(run, automation.QUALITY, {"workflow_dispatch"}, target["base_branch"])
+        if (not automation.positive(run.get("id"))
+                or not automation.positive(run.get("run_attempt"))
+                or run.get("display_title") != expected_title
+                or run.get("head_sha") != target["base_sha"]
+                or (run_id is not None and (run["id"] != run_id or run["run_attempt"] != attempt))):
+            raise ValueError("Quality dispatch run does not match the reserved head, base or request.")
+        return run
+
+    def request_quality(self, target, candidate, pull, validate_pull):
+        """One durable check reservation per verified Software Factory attempt.
+
+        This executes only in the trusted publisher, serialized with the
+        Quality Factory check writers. A reservation precedes the dispatch.
+        A replay can adopt it but must never dispatch a second controller
+        based on the absence of a visible Actions run.
+        """
+        request_id = f"{self.run_id}-{self.attempt}"
+        intent = automation.pr_intent_digest(pull)
+        check = self.find_check(pull)
+        created = check is None
+        run = None
+        if created:
+            self.current(target)
+            identity = automation.owner(pull["number"], target["base_sha"], "request",
+                                        self.run_id, self.attempt, request_id, intent=intent)
+            try:
+                check = self.update_check(
+                    pull, None, identity, "queued", "Factory quality request reserved",
+                    "The verified draft is awaiting a pinned Quality Factory controller. "
+                    "A repeated publisher will reconcile this reservation, not dispatch twice.")
+            except (OSError, ValueError) as exc:
+                # A POST response may be lost *after* GitHub creates the check.
+                # Re-read its immutable owner instead of posting a second one.
+                check = self.find_check(pull)
+                if (check is None or automation.check_owner(check) != identity):
+                    raise ValueError("Quality reservation response uncertain; do not replay the "
+                                     "dispatch until a maintainer inspects the owned check.") from exc
+                self.publication_state["recovered_quality_reservation"] = True
+            self.publication_state.update({"phase": "quality_reserved", "quality_request_id": request_id,
+                                           "quality_check_id": check["id"], "quality_requested": None})
+        else:
+            identity = automation.check_owner(check)
+            if (not identity or identity.get("q") != request_id
+                    or identity.get("b") != target["base_sha"]
+                    or identity.get("t") != intent or identity.get("p") != pull["number"]
+                    or identity.get("v") != 3):
+                raise ValueError("A different or stale Quality Factory request owns this PR; "
+                                 "refusing a competing controller.")
+            if identity["k"] == "request":
+                if (identity["i"] != self.run_id or identity["a"] != self.attempt
+                        or check.get("status") not in {"queued", "in_progress"}):
+                    raise ValueError("Factory quality reservation changed or completed without a verified controller.")
+                run = self.quality_run(request_id, pull, target)
+            elif identity["k"] == "run":
+                run = self.quality_run(request_id, pull, target, identity["i"], identity["a"])
+            else:
+                raise ValueError("Factory quality request was superseded; refusing another dispatch.")
+            self.publication_state.update({"phase": "quality_reconciled", "quality_request_id": request_id,
+                                           "quality_check_id": check["id"], "quality_requested": run is not None})
+            if run is None:
+                self.publication_state["quality_requested"] = None
+                self.publication_state["recovery"] = (
+                    "A durable Quality request exists but no attributed controller is visible. "
+                    "The dispatch response may have been lost. Do not auto-dispatch again. "
+                    "Inspect the request/check and Actions runs; a maintainer may launch a "
+                    "new assessment from the default branch after reconciling the old request.")
+                raise ValueError("Reserved quality dispatch is uncertain; human reconciliation required.")
+
+        if created:
+            self.current(target)
+            latest = self.api.get(self.path(f"pulls/{pull['number']}"))
+            validate_pull(latest)
+            try:
+                self.api.post(self.path("actions/workflows/" + automation.QUALITY + "/dispatches"), {
+                    "ref": target["base_branch"],
+                    "inputs": {"pr-number": str(pull["number"]), "expected-head": candidate["head_sha"],
+                               "expected-base": target["base_sha"], "request-id": request_id}})
+            except (OSError, ValueError) as exc:
+                # A lost 204 may have launched the controller. Never send a
+                # second POST; the pending check cannot grant a passing gate.
+                run = self.quality_run(request_id, pull, target)
+                if run is None:
+                    self.publication_state["recovery"] = (
+                        "Quality dispatch may have been accepted, but no matching workflow run is visible. "
+                        "Do not retry the dispatch blindly; inspect the reserved check and "
+                        "manually request a fresh assessment if no controller ultimately starts.")
+                    raise ValueError("Quality dispatch response uncertain; no repeat dispatch permitted.") from exc
+                self.publication_state["recovered_quality_dispatch"] = True
+            self.publication_state.update({"phase": "quality_dispatched", "quality_requested": True})
+        else:
+            self.publication_state.update({"phase": "quality_reconciled", "quality_requested": True})
+
+        return {"quality_requested": True, "quality_passed": False,
+                "quality_request_id": request_id, "quality_check_id": check["id"],
+                "quality_run_id": run["id"] if run else None,
+                "quality_reconciled": not created or self.publication_state.get("recovered_quality_dispatch", False)}
+
     def publish(self, bundle, result, repo, at=None):
         # CLI arguments arrive as strings. The verifier accepts and normalizes
         # both forms, but later PR-description/evidence reads require Path.
@@ -708,7 +826,9 @@ class SoftwareHost(automation.Host):
             raise ValueError("GitHub commit differs from the verified candidate.")
         self.current(target)
         branch = f"sfstack/issue-{target['issue']['number']}-{self.run_id}-{self.attempt}"
-        self.publication_state = {"published": False, "quality_requested": False, "branch": branch,
+        self.publication_state = {"published": False, "quality_requested": False, "phase": "creating_branch",
+                                  "branch": branch, "base_sha": target["base_sha"],
+                                  "run_id": self.run_id, "run_attempt": self.attempt,
                                   "candidate_sha": candidate["head_sha"], "merge_authorized": False}
         refs = self.api.get(self.path("git/matching-refs/heads/" + quote(branch, safe="")))
         exact = [ref for ref in refs if ref.get("ref") == "refs/heads/" + branch]
@@ -716,7 +836,19 @@ class SoftwareHost(automation.Host):
             if len(exact) != 1 or exact[0].get("object", {}).get("sha") != candidate["head_sha"]:
                 raise ValueError("Factory branch exists with different content; it will not be overwritten.")
         else:
-            self.api.post(self.path("git/refs"), {"ref": "refs/heads/" + branch, "sha": candidate["head_sha"]})
+            try:
+                self.api.post(self.path("git/refs"), {"ref": "refs/heads/" + branch,
+                                                      "sha": candidate["head_sha"]})
+            except (OSError, ValueError) as exc:
+                # Git refs are immutable publication pointers in this workflow.
+                # On a lost create response, only the *exact* expected SHA can
+                # be adopted. Different or missing refs are never overwritten.
+                observed = self.api.get(self.path("git/matching-refs/heads/" + quote(branch, safe="")))
+                matched = [ref for ref in observed if ref.get("ref") == "refs/heads/" + branch]
+                if len(matched) != 1 or matched[0].get("object", {}).get("sha") != candidate["head_sha"]:
+                    raise ValueError("Factory branch creation is uncertain or conflicts with the verified SHA.") from exc
+                self.publication_state["recovered_branch_response"] = True
+        self.publication_state["phase"] = "branch_confirmed"
         self.current(target)
         pulls = self.pages("pulls?" + urlencode({"state": "all", "head": self.repository.split('/')[0] + ":" + branch}))
         evidence_url = f"https://github.com/{self.repository}/actions/runs/{self.run_id}/artifacts/{artifact['id']}"
@@ -752,26 +884,40 @@ class SoftwareHost(automation.Host):
                 "url": f"https://github.com/{self.repository}/pull/{pull['number']}", "evidence_url": evidence_url})
             validate_pull(pull)
         else:
-            # If the response is lost, publication may have happened. Report
-            # uncertainty rather than telling an operator no PR exists.
-            self.publication_state["published"] = None
-            pull = self.api.post(self.path("pulls"), {"title": title,
-                "head": branch, "base": target["base_branch"], "body": body, "draft": True,
-                "maintainer_can_modify": True})
-        self.publication_state.update({"published": True, "draft": True, "pull_request": pull["number"],
+            self.publication_state.update({"published": None, "phase": "draft_creation_uncertain"})
+            try:
+                pull = self.api.post(self.path("pulls"), {"title": title,
+                    "head": branch, "base": target["base_branch"], "body": body, "draft": True,
+                    "maintainer_can_modify": True})
+            except (OSError, ValueError) as exc:
+                # The PR may exist even though GitHub lost its creation reply.
+                # Reconcile the *complete* exact PR, not just its head ref.
+                observed = self.pages("pulls?" + urlencode({
+                    "state": "all", "head": self.repository.split('/')[0] + ":" + branch}))
+                if len(observed) != 1:
+                    raise ValueError("Draft PR creation is uncertain; inspect the factory branch "
+                                     "and existing PRs before rerunning the publisher.") from exc
+                pull = observed[0]
+                validate_pull(pull)
+                self.publication_state["recovered_pr_response"] = True
+        validate_pull(pull)
+        self.publication_state.update({"published": True, "draft": True, "phase": "draft_confirmed",
+                                       "pull_request": pull["number"],
             "url": f"https://github.com/{self.repository}/pull/{pull['number']}", "evidence_url": evidence_url})
         self.current(target)
         current_pull = self.api.get(self.path(f"pulls/{pull['number']}"))
         if current_pull.get("number") != pull["number"]:
             raise ValueError("Factory PR identity changed before quality dispatch.")
         validate_pull(current_pull)
-        self.api.post(self.path("actions/workflows/sfstack-quality.yml/dispatches"), {
-            "ref": target["base_branch"], "inputs": {"pr-number": str(pull["number"]),
-                "expected-head": candidate["head_sha"], "expected-base": target["base_sha"]}})
+        quality_request = self.request_quality(target, candidate, current_pull, validate_pull)
         return {"published": True, "draft": True, "pull_request": pull["number"],
                 "url": f"https://github.com/{self.repository}/pull/{pull['number']}",
-                "candidate_sha": candidate["head_sha"], "quality_requested": True,
-                "quality_passed": False, "evidence_url": evidence_url, "merge_authorized": False}
+                "candidate_sha": candidate["head_sha"], **quality_request,
+                "evidence_url": evidence_url, "merge_authorized": False,
+                "recovery": {name: self.publication_state[name] for name in
+                             ("recovered_branch_response", "recovered_pr_response",
+                              "recovered_quality_reservation", "recovered_quality_dispatch")
+                             if name in self.publication_state}}
 
 
 def context():
@@ -830,7 +976,9 @@ def main(argv=None):
         elif args.command == "publish":
             state = getattr(locals().get("host"), "publication_state", {"published": False, "quality_requested": False})
             write_json(args.out, {**state, "reason": str(exc),
-                                  "recovery": "Inspect this run and any sfstack/issue branch or draft PR before retrying. No merge was authorized."})
+                                  "recovery": state.get("recovery",
+                                      "Inspect the original immutable artifacts, exact branch, draft PR and "
+                                      "owned quality check before retrying. No merge was authorized.")})
         print("sfstack-software: " + str(exc), file=sys.stderr)
         return 1
 
