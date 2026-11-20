@@ -372,7 +372,11 @@ rejects that inconsistent response **before** independent RED/GREEN testing.
 Keep that negative result; it cannot be reinterpreted as passing. Clarify the
 advisory/nonblocking distinction in the agent invocation, and dispatch a new
 run after any controller/base change; do not patch old evidence. If draft creation fails, inspect the publication
-step and repository PR-creation permission. If a draft exists but quality
+step and repository PR-creation permission. If a **trusted passing gate**
+already created an immutable factory branch but the publisher failed later,
+follow the [provenance-preserving recovery](#safe-recovery-when-verification-passes-but-draft-publication-fails)
+without rerunning the paid builder. Do not reuse old-base evidence to grant
+a new-base merge. If a draft exists but quality
 dispatch failed, run **sfstack GitHub quality** manually for that PR from the
 current default branch, using the [quality retry instructions](run-github.md#run-or-retry-manually).
 
@@ -392,15 +396,139 @@ or merges anything. Never paste a token value into an issue, input, log, or PR.
 | The agent job is green but the verification job says `Passing build lacks complete criteria, behavioral checks, or a complete bounded change.` | The structured `submit_change` can claim `status=passed` while listing unfinished `remaining_work` (or omitting actual checks/edits). Advisory risks and mandatory downstream review should instead be disclosed in `limitations`. | Inspect `sfstack-agent-change-<attempt>` and `sfstack-software-result-<attempt>`. Do not suppress nonempty `remaining_work` or publish; if the controller was updated, dispatch a new run from current `main`. |
 | The host rejects `Duplicate JSON key.` | The agent produced ambiguous raw `proposal.json` with a repeated field such as `limitations`. Ordinary JSON decoding can hide this error by keeping only the final value. | Inspect the declared proposal artifact without normalizing it. Correct the source object and rerun preflight on the raw file; do not relax strict parsing or replay rejected evidence. |
 | Verification stops with `Agent proposal artifact changed after preflight`, or the declared file is missing. | The compiler-redacted artifact bytes differ from the preflight checksum, possibly because secret masking was necessary; the job cannot safely read the fixed artifact, or the receipt is invalid. | Preserve negative evidence. Inspect only hashes and approved paths, never credentials; do not reconstruct masked bytes, disable redaction, or replay rejected artifacts. Fix legitimate proposal content or use a human-authorized development workflow. |
+| Verified candidate branch exists, but draft publisher logs `unsupported operand type(s) for /: 'str' and 'str'`. | The publisher used a CLI string as a `Path` (fixed by [PR #24](https://github.com/grove/sfstack/pull/24)). | Keep the passing run artifacts and immutable candidate branch. Use a separately reviewed recovery draft on the current base; do not rerun Copilot to fix a publisher-only type error. |
+| A Quality Factory assessment launched for a PR fails after the PR is merged because `current-pr.json` is missing. | Its current-PR metadata handoff could not find a still-open PR at finalization. The gate correctly blocks rather than accepting stale identity. | Preserve the failed historical assessment and its logs. Inspect earlier pinned passing quality evidence and fresh post-merge `main` validation; do not relabel the failed check as successful. |
 | Verification fails. | The proposed files violate the checks or criteria. | Inspect the retained logs. No draft is published; fix the issue or inputs and dispatch a new run. |
 
-## Complete the first live acceptance test
+## Completed v0.2 live defect pilot — credential inheritance (#15)
 
-After merge, use one small sfstack issue as the first live implementation run.
-Confirm that the draft contains only the selected files, preserves the requested
-behavior, links the software evidence, and receives a quality assessment for its
-exact head. Inspect the builder's claims against the actual logs and diff, then
-record the human corrections needed before merge.
+The first live bounded defect-repair pilot has a **merged, independently
+verified repair**: [issue #15](https://github.com/grove/sfstack/issues/15),
+[recovered PR #25](https://github.com/grove/sfstack/pull/25),
+merged as `77be8a406d160e1d91c00bbbe53039b02d99f613` on
+November 20, 2026. The tested change is restricted to
+`examples/adapters/python_unittest.py` and
+`tests/test_python_unittest_env.py`. The regression sets **dummy canaries**,
+not credentials, and confirms common sensitive host environment variables
+are absent in candidate tests while essential process environment such as
+`PATH` remains available.
+
+### Five live Copilot attempts and measured workflow time
+
+Each row is one **real** Software Factory GitHub Actions invocation, not
+five successful PRs. Times are the elapsed wall-clock span between the
+reported workflow creation and completion, including CI and queue overhead;
+they are **not** model execution time or billed Copilot credits.
+
+| Attempt | Workflow run | Elapsed | Outcome and retained negative evidence |
+| --- | --- | --- | --- |
+| 1 | [44689746001](https://github.com/grove/sfstack/actions/runs/44689746001) | 7m 08s | `status=passed` incorrectly accompanied by unfinished `remaining_work` entries (advisories and later review); host blocked before RED/GREEN; fixed distinction in [PR #16](https://github.com/grove/sfstack/pull/16). |
+| 2 | [44692099960](https://github.com/grove/sfstack/actions/runs/44692099960) | 9m 36s | Genuine outer unittest RED assertion was rejected because nested inner unittest summaries confused the strict parser; fixed in [PR #17](https://github.com/grove/sfstack/pull/17). |
+| 3 | [44700503624](https://github.com/grove/sfstack/actions/runs/44700503624) | 7m 09s | Two root `limitations` keys in serialized JSON; strict host rightly blocked. [PR #18](https://github.com/grove/sfstack/pull/18) added agent preflight without relaxing the host. |
+| 4 | [44705187658](https://github.com/grove/sfstack/actions/runs/44705187658) | 17m 33s | Baseline and RED succeeded, but safe-output transport modified three escaped newlines to `(n/redacted)`; GREEN/full suite failed. [PR #21](https://github.com/grove/sfstack/pull/21) added fail-closed checksum comparison and [PR #23](https://github.com/grove/sfstack/pull/23) replaced the lossy string with a declared, compiler-redacted artifact. |
+| 5 | [44746100752](https://github.com/grove/sfstack/actions/runs/44746100752) | 9m 46s | **First verified complete repair:** artifact checksum matched, 294 baseline tests passed, one genuine RED assertion failed, GREEN passed, all 295 repaired tests passed. Draft publication then failed on a Python string/`Path` type error *after* creating immutable Git objects and a candidate branch. [PR #24](https://github.com/grove/sfstack/pull/24) fixed the publisher boundary. |
+
+Total observed workflow elapsed time for these five invocations:
+**51m 12s**, excluding subsequent PR review, recovery, and normal CI.
+Retrieve actual model tokens, credit costs and billable Actions minutes
+from the individual usage artifacts and account billing data; the GitHub
+workflow elapsed durations alone **do not** establish those figures.
+All five original workflow runs are marked **failure**. Do not report a
+`5/5` automatic repair success rate or count the recovered PR as an
+unattended Software Factory publication.
+
+### Recovered change, independent gates and final merge
+
+The fifth run's [agent handoff](https://github.com/grove/sfstack/actions/runs/44746100752/artifacts/14633526868)
+contains `submission.json` with a **SHA-only** `submit_change` receipt
+and a separate redacted `proposal.json`. Both the declared agent file and
+[trusted result](https://github.com/grove/sfstack/actions/runs/44746100752/artifacts/14633312579)
+match SHA-256
+`89bbdb11c90fe265349b5494f0e880dbc0d8f12b415e5ef2aeea4d38d13d6eae`
+for the **raw UTF-8 proposal**, before candidate execution. This is
+positive evidence of byte-preserving **nonsecret** source transport with
+the pinned gh-aw v1.2.2 compiler. Mandatory secret redaction remains on;
+if it changes bytes, the receipt mismatch must block. The exact upstream
+stage that produced the fourth attempt's three `(n/redacted)` markers
+was not separately isolated. The alternative artifact route avoids
+transporting code through that sanitizer.
+
+The publisher had created
+`sfstack/issue-15-44746100752-1` at the verified
+`f1fc22acdd8c8005e2dd0a086b2a5bc460da4f16` before failing.
+Rather than rerunning Copilot or changing old evidence, the maintainer
+fixed the CLI path bug in [PR #24](https://github.com/grove/sfstack/pull/24).
+A separate [recovery draft PR #25](https://github.com/grove/sfstack/pull/25)
+combined then-current `main` with **exactly the two previously
+verified Git blobs**, preserving the original branch and parent commit
+and requiring new checks for the combined commit.
+
+[PR #25 CI](https://github.com/grove/sfstack/actions/runs/44751815984)
+passed (296 tests on Python 3.11, Python 3.13, compiled workflow);
+[initial Quality Factory assessment](https://github.com/grove/sfstack/actions/runs/44751864283)
+passed. A **later redundant** [Quality Factory run](https://github.com/grove/sfstack/actions/runs/44752337732)
+blocked the review handoff because `current-pr.json` was missing after the
+PR closed around its merge, **not** because a regression or criteria
+check failed. That latest failed check remains preserved; do not re-label
+it as passed or treat an earlier superseded check as current clearance.
+The [post-merge validation on the actual main
+commit](https://github.com/grove/sfstack/actions/runs/44753186216)
+passed **296 tests**, Python 3.13, and workflow compilation.
+GitHub had no separately recorded PR review approval; the actual merge
+was a **human decision**, not authorization from a quality check.
+
+### What was and was not demonstrated
+
+- The v0.2 controller can independently prove baseline GREEN, authentic
+  regression RED, repaired GREEN, full-suite GREEN, correct immutable
+  candidate and a strict file allowlist. The merged defect fix prevents
+  inheritance of the tested credential names via candidate-test
+  environment variables.
+- Artifact transport is byte-preserving for the observed nonsecret
+  proposal, with fail-closed checksums before executing candidate code.
+  It is **not** a route for exposing or reconstructing masked secrets.
+- **Fully unattended issue-to-draft-PR publication was not demonstrated**:
+  the passing fifth builder needed manual draft recovery after its
+  separate publisher failure. Do not rewrite that run's final status.
+- Candidate tests run under ordinary CI, not a hardened hostile-code
+  sandbox. `HOME` and filesystem access still exist, and a broad
+  `PYTHON*` environment prefix can forward other host variables. The
+  separately scoped [follow-up defect #26](https://github.com/grove/sfstack/issues/26)
+  records the prefix limitation. Do not claim universal credential
+  isolation based on the five fixed-name canaries.
+- A **second different defect pilot** is an additional experiment, not
+  an automatic consequence of closing this one. Select the new issue,
+  exact two-file scope, fresh baseline and budget before any model
+  dispatch, and preserve negative results.
+
+### Safe recovery when verification passes but draft publication fails
+
+Check the [run-scoped result artifact](https://github.com/grove/sfstack/actions/runs/44746100752/artifacts/14633312579)
+and immutable candidate branch **before** doing anything expensive.
+Distinguish failures *before* trusted verification (do not publish) from
+errors *after* a passing gate (potentially recoverable). Verify the exact
+candidate SHA, live issue and base, correct two-file blob identities,
+receipt/proposal hashes, original test logs and negative findings.
+
+If `main` has moved, create a **separate recovery branch/commit** from
+current `main` plus the exact reviewed files; do not force-push the
+original candidate or claim that old source evidence validates a new
+combined commit. Open only a **draft** PR, linking the original run and
+stating the recovery authority is a maintainer action rather than
+software-factory automation. Obtain **fresh CI, Quality Factory and
+human review** for the new candidate. Never merge solely because a
+previous attempt's checker said `passed`, and never rerun all paid
+agent jobs to fix a downstream-only publication type error.
+
+## Repeat a controlled live acceptance test on a different defect
+
+After the completed issue #15 pilot, select a **different** genuine defect
+with a reproducible harmless symptom, an existing permitted implementation
+file and one new regression file. For the available follow-up see
+[issue #26](https://github.com/grove/sfstack/issues/26). Authorize its scope,
+acceptance criteria, model cost and source revision explicitly before dispatch.
+Inspect the builder's claims against actual logs and diff, and record
+any human corrections needed before considering a merge.
 
 Separately exercise a disposable PR with a real failing regression, confirm that
 `sfstack quality` fails, fix the defect, and confirm a fresh assessment passes.
@@ -410,6 +538,8 @@ Do not merge the intentionally defective candidate.
 
 Record both workflow run URLs, head and base SHAs, attempt numbers, artifact
 links, elapsed time, model usage as reported by the platform, and human repair
-count. Live implementation runtime and success rate remain unmeasured until
-these runs complete. Local regression tests and compiler validation do not
-establish Copilot's live implementation quality or end-to-end GitHub success.
+count. The first five live defect invocations and their measured workflow durations
+are documented above; none completed automatic draft publication, though the
+fifth produced a verified candidate later recovered by a maintainer. Local
+regression tests and compiler validation alone do not establish general
+Copilot success or end-to-end GitHub publication reliability.
