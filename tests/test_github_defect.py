@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -29,6 +30,30 @@ class ExactReservation(unittest.TestCase):
     def test_exact_quantity(self):
         self.assertEqual(0, reserve(5, 5))
 """
+
+# Reproduces the exact shape of issue #15 run 44692099960: an outer
+# assertion quotes a failing subprocess/inner unittest report. The outer
+# runner alone supplies the authoritative RED count and verdict.
+NESTED_REGRESSION_TEST = """import io
+import unittest
+from examples.inventory import reserve
+
+
+class NestedAdapterRegression(unittest.TestCase):
+    def test_nested_assertion(self):
+        class InnerCheck(unittest.TestCase):
+            def test_partial(self):
+                self.assertEqual(3, reserve(5, 2))
+
+            def test_exact(self):
+                self.assertEqual(0, reserve(5, 5))
+
+        stream = io.StringIO()
+        result = unittest.TextTestRunner(stream=stream, verbosity=2).run(
+            unittest.defaultTestLoader.loadTestsFromTestCase(InnerCheck))
+        self.assertTrue(result.wasSuccessful(), stream.getvalue())
+"""
+
 
 DIAGNOSIS = {
     "symptom": "Exact stock reservations return None.",
@@ -147,6 +172,61 @@ class DefectRepairTests(SoftwareFixture):
         self.assertIn(evidence["red_head_sha"], body)
         self.assertIn("logs", body)
         self.assertFalse(any("merge" in path for _, path, _ in api.mutations))
+
+    def test_nested_unittest_failure_accepts_outer_assertion_only(self):
+        """Pilot #15: inner FAIL + outer FAIL must count as one real RED test."""
+        self.prepare_defect()
+        self.propose(regression=NESTED_REGRESSION_TEST)
+        gate = self.verify()
+        self.assertTrue(gate["passed"])
+        proof = load_json(self.result / "defect-evidence.json")
+        self.assertEqual("passed", proof["status"])
+        self.assertEqual("failed", proof["red"]["status"])
+        self.assertEqual(1, proof["red"]["tests_run"])
+        self.assertEqual("passed", proof["green"]["status"])
+        self.assertEqual(1, proof["green"]["tests_run"])
+        red_log = self.result / "logs/red-regression.txt"
+        content = red_log.read_text(encoding="utf-8")
+        self.assertEqual(2, len(re.findall(r"^Ran \d+ tests? in ", content, re.MULTILINE)))
+        self.assertIn("Ran 2 tests in ", content)
+        self.assertIn("Ran 1 test in ", content)
+        self.assertIn("FAILED (failures=1)", content)
+        self.assertEqual("passed", load_json(self.result / "verification-report.json")["status"])
+        api, host = self.published_host()
+        publication = host.publish(self.bundle, self.result, self.repo, at=self.at)
+        self.assertTrue(publication["draft"])
+        self.assertTrue(publication["quality_requested"])
+        self.assertFalse(publication["merge_authorized"])
+
+    def test_nested_inner_failure_cannot_disguise_outer_error_as_red(self):
+        self.prepare_defect()
+        self.propose(regression=NESTED_REGRESSION_TEST.replace(
+            "self.assertTrue(result.wasSuccessful(), stream.getvalue())",
+            "raise RuntimeError(stream.getvalue())"))
+        gate = self.verify()
+        self.assertFalse(gate["passed"])
+        self.assertEqual("failed", gate["status"])
+        self.assertIn("RED", gate["reasons"][0])
+        red_log = (self.result / "logs/red-regression.txt").read_text(encoding="utf-8")
+        self.assertIn("FAILED (errors=1)", red_log)
+        self.assertFalse((self.result / "candidate.json").exists())
+
+    def test_nested_red_requires_intact_terminal_runner_verdict(self):
+        """Appended diagnostic text cannot supply missing final runner evidence."""
+        from integrations.github import defect
+        self.prepare_defect()
+        self.propose(regression=NESTED_REGRESSION_TEST)
+        gate = self.verify()
+        self.assertTrue(gate["passed"])
+        evidence = load_json(self.result / "defect-evidence.json")
+        log = self.result / "logs/red-regression.txt"
+        original = log.read_bytes()
+        try:
+            log.write_bytes(original + b"\ntrailing untrusted output\n")
+            self.assertFalse(defect.red_assertion(evidence["red"], log))
+        finally:
+            log.write_bytes(original)
+        self.assertTrue(defect.red_assertion(evidence["red"], log))
 
     def test_defect_mode_requires_new_exact_regression_and_implementation_scope(self):
         for changes in (
