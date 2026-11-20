@@ -2,7 +2,7 @@ name: sfstack quality events
 
 # No PR checkout, candidate execution, or artifact evaluation occurs here.
 # workflow_run loads this workflow from the default branch. The push trigger
-# refreshes assessments after the protected base moves.
+# invalidates stale clearance after base moves WITHOUT expensive reviews.
 on:
   workflow_run:
     workflows: [sfstack PR signal, sfstack GitHub quality]
@@ -14,13 +14,11 @@ permissions: {}
 
 jobs:
   dispatch:
-    name: Dispatch current PR assessments
+    name: Dispatch PR-change assessments
     if: >-
-      (github.event_name == 'push' &&
-       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) ||
-      (github.event_name == 'workflow_run' && github.event.action == 'completed' &&
-       github.event.workflow_run.path == '.github/workflows/sfstack-pr-signal.yml' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
+      github.event_name == 'workflow_run' && github.event.action == 'completed' &&
+      github.event.workflow_run.path == '.github/workflows/sfstack-pr-signal.yml' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -45,6 +43,38 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >-
           python controller/integrations/github/automation.py dispatch
+          --event "$GITHUB_EVENT_PATH"
+
+  invalidate:
+    name: Invalidate stale PR checks (no AI)
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Deliberately NO actions:write; this job cannot dispatch AI reviews.
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: write
+    concurrency:
+      group: sfstack-quality-publication-${{ github.repository }}
+      queue: max
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: controller
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Revoke old-base check clearance without dispatching a review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python controller/integrations/github/automation.py invalidate
           --event "$GITHUB_EVENT_PATH"
 
   reconcile:

@@ -126,7 +126,7 @@ def check_owner(check):
         if (not isinstance(value, dict) or not ((value.get("v") == 2 and set(value) == fields)
                  or (value.get("v") == 3 and set(value) == fields | {"g"} and positive(value["g"])))
                 or not all(positive(value[key]) for key in ("p", "i", "a"))
-                or value["k"] not in {"request", "run"} or not SHA.fullmatch(value["b"])
+                or value["k"] not in {"request", "run", "stale"} or not SHA.fullmatch(value["b"])
                 or not (value["q"] == "manual" or REQUEST_ID.fullmatch(value["q"]))):
             return None
         return value
@@ -272,51 +272,93 @@ class Host:
                               previous.get("details_url"))
         return self.update_check(pr, None, identity, status, title, summary, conclusion, details_url)
 
+    def invalidate(self, event):
+        """Revoke old-base clearance on a push, without any Actions dispatch.
+
+        This code only runs with read/checks permissions. No candidate runs or
+        agent review can start here. Missing or already-negative quality checks
+        cannot grant clearance; GitHub must separately require sfstack quality.
+        """
+        repository, _ = self.trusted_context(EVENTS, {"push"})
+        branch = repository["default_branch"]
+        tip = self.default_sha(branch)
+        if tip != self.context["workflow_sha"]:
+            return {"invalidated": [], "reason": "A newer controller policy owns the current base."}
+        if (event.get("ref") != "refs/heads/" + branch or event.get("deleted")
+                or event.get("after") != tip):
+            return {"invalidated": [], "reason": "Stale or nondefault branch push."}
+        candidates = self.pages("pulls?" + urlencode({"state": "open", "base": branch}))
+        invalidated = []
+        for candidate in candidates:
+            # The trusted integration does not assess fork PRs.
+            if candidate.get("head", {}).get("repo", {}).get("full_name", "").lower() != self.repository.lower():
+                continue
+            pr = self.pr(candidate["number"], branch)
+            check = self.find_check(pr)
+            if check is None:
+                # No owned clearance to revoke. The required check must block.
+                continue
+            previous = check_owner(check)
+            if previous["b"] == tip:
+                continue
+            if check.get("status") == "completed" and check.get("conclusion") != "success":
+                # Already negative: repeated base pushes need no check writes.
+                continue
+            identity = owner(pr["number"], tip, "stale", self.run_id, self.attempt,
+                             "manual", previous.get("g", 0) + 1)
+            self.replace_check(
+                pr, check, identity, "completed", "Base changed - quality revalidation required",
+                f"PR #{pr['number']} head {pr['head']['sha']} was previously assessed "
+                f"against base {previous['b']}. Current base is {tip}.\n\n"
+                "The previous quality result no longer grants clearance. "
+                "No AI review or candidate code was run on this base push.\n\n"
+                "Before merging, explicitly dispatch sfstack GitHub quality "
+                "from the default branch for this PR, and require the new "
+                "quality check, ordinary CI, and independent human approval.",
+                "failure",
+            )
+            invalidated.append(pr["number"])
+        return {"invalidated": invalidated, "dispatched": []}
+
     def dispatch(self, event):
-        repository, _ = self.trusted_context(EVENTS, {"workflow_run", "push"})
+        repository, _ = self.trusted_context(EVENTS, {"workflow_run"})
         branch = repository["default_branch"]
         tip = self.default_sha(branch)
         if tip != self.context["workflow_sha"]:
             return {"dispatched": [], "reason": "Controller policy advanced; a newer event owns reassessment."}
-        if self.context["event_name"] == "push":
-            if event.get("ref") != "refs/heads/" + branch or event.get("deleted") or event.get("after") != tip:
-                return {"dispatched": [], "reason": "Stale or nondefault branch push."}
+        trigger = event.get("workflow_run", {})
+
+        if event.get("action") != "completed" or not positive(trigger.get("id")):
+            return {"dispatched": [], "reason": "Not a completed PR signal."}
+        source = self.api.get(self.path(f"actions/runs/{trigger['id']}"))
+        self.validate_run(source, SIGNAL, {"pull_request"})
+        if (source.get("status") != "completed" or source.get("run_attempt") != trigger.get("run_attempt")
+                or source.get("head_sha") != trigger.get("head_sha")):
+            return {"dispatched": [], "reason": "Stale signal attempt."}
+        associated = source.get("pull_requests", [])
+        if not isinstance(associated, list):
+            return {"dispatched": [], "reason": "Malformed PR signal associations."}
+        if len(associated) == 1:
+            numbers = [associated[0].get("number")]
+        elif not associated:
+            # GitHub can return an empty pull_requests array for an actual
+            # pull_request workflow run. Reconcile against current API PRs;
+            # the authenticated signal's exact head and branch must match
+            # one and only one eligible same-repository PR.
             candidates = self.pages("pulls?" + urlencode({"state": "open", "base": branch}))
-            numbers = [pr["number"] for pr in candidates
-                       if pr.get("head", {}).get("repo", {}).get("full_name", "").lower() == self.repository.lower()]
+            numbers = [candidate["number"] for candidate in candidates
+                       if candidate.get("head", {}).get("sha") == source.get("head_sha")
+                       and candidate.get("head", {}).get("ref") == source.get("head_branch")
+                       and candidate.get("head", {}).get("repo", {}).get("full_name", "").lower() == self.repository.lower()]
         else:
-            trigger = event.get("workflow_run", {})
-            if event.get("action") != "completed" or not positive(trigger.get("id")):
-                return {"dispatched": [], "reason": "Not a completed PR signal."}
-            source = self.api.get(self.path(f"actions/runs/{trigger['id']}"))
-            self.validate_run(source, SIGNAL, {"pull_request"})
-            if (source.get("status") != "completed" or source.get("run_attempt") != trigger.get("run_attempt")
-                    or source.get("head_sha") != trigger.get("head_sha")):
-                return {"dispatched": [], "reason": "Stale signal attempt."}
-            associated = source.get("pull_requests", [])
-            if not isinstance(associated, list):
-                return {"dispatched": [], "reason": "Malformed PR signal associations."}
-            if len(associated) == 1:
-                numbers = [associated[0].get("number")]
-            elif not associated:
-                # GitHub can return an empty pull_requests array for an actual
-                # pull_request workflow run. Reconcile against current API PRs;
-                # the authenticated signal's exact head and branch must match
-                # one and only one eligible same-repository PR.
-                candidates = self.pages("pulls?" + urlencode({"state": "open", "base": branch}))
-                numbers = [candidate["number"] for candidate in candidates
-                           if candidate.get("head", {}).get("sha") == source.get("head_sha")
-                           and candidate.get("head", {}).get("ref") == source.get("head_branch")
-                           and candidate.get("head", {}).get("repo", {}).get("full_name", "").lower() == self.repository.lower()]
-            else:
-                return {"dispatched": [], "reason": "Ambiguous PR signal associations."}
-            if len(numbers) != 1 or not positive(numbers[0]):
-                return {"dispatched": [], "reason": "PR signal cannot identify one current PR."}
-            pr = self.pr(numbers[0], branch)
-            if (pr["head"]["sha"] != source.get("head_sha")
-                    or pr["head"].get("ref") != source.get("head_branch")):
-                return {"dispatched": [], "reason": "PR advanced after the signal."}
-            numbers = [pr["number"]]
+            return {"dispatched": [], "reason": "Ambiguous PR signal associations."}
+        if len(numbers) != 1 or not positive(numbers[0]):
+            return {"dispatched": [], "reason": "PR signal cannot identify one current PR."}
+        pr = self.pr(numbers[0], branch)
+        if (pr["head"]["sha"] != source.get("head_sha")
+                or pr["head"].get("ref") != source.get("head_branch")):
+            return {"dispatched": [], "reason": "PR advanced after the signal."}
+        numbers = [pr["number"]]
         dispatched = []
         request_id = f"{self.run_id}-{self.attempt}"
         for number in numbers:
@@ -566,7 +608,7 @@ class Host:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("dispatch", "reconcile"):
+    for name in ("dispatch", "invalidate", "reconcile"):
         command = commands.add_parser(name)
         command.add_argument("--event", required=True)
     start = commands.add_parser("start")

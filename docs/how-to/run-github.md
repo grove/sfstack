@@ -1,7 +1,9 @@
 # Run quality assessment with GitHub Actions and Agentic Workflows
 
-The GitHub integration automatically assesses open, same-repository PRs targeting
-the default branch and publishes **`sfstack quality`** on the exact PR head.
+The GitHub integration assesses eligible PR changes and publishes
+**`sfstack quality`** on the exact PR head. A push to the default branch
+**invalidates stale approvals without automatically launching AI review**.
+Maintainers explicitly refresh a selected PR before merging.
 Ordinary Actions jobs execute deterministic checks and apply the quality policy.
 A reusable [GitHub Agentic Workflow](https://github.github.com/gh-aw/) uses
 Copilot to perform `sf-review-change` between those jobs.
@@ -81,25 +83,43 @@ Missing artifacts, stale identities, and unsuccessful or absent agent review
 cannot become an implicit pass. A valid negative verification report is retained
 and passed through review and consolidation, so failed tests remain evidence.
 
-When `main` advances, the coordinator queues fresh assessments for open
-same-repository PRs targeting it. GitHub may continue to report an older
-`pull_request.base.sha` even after that branch advances: sfstack resolves the
-current default-branch ref separately, preserves the API-reported base SHA as
-`base.reported_sha` in its normalized PR snapshot, and pins the live ref as
-the actual assessment base. The final quality gate refreshes that same ref and
-rejects genuine head or branch-tip changes.
+When `main` advances, a **checks-only invalidation job** examines current
+open, same-repository PRs targeting `main`. For an owned quality check with a
+successful or still-pending verdict against an **older base**, it retires the
+previous check and publishes a **completed failure** named `sfstack quality`
+on the same PR head: *Base changed - quality revalidation required*. It does
+**not** dispatch `sfstack GitHub quality`, run candidate code, or invoke an
+AI reviewer. If a PR has no owned check, there is no clearance to revoke:
+the required status check must treat the absence as blocking. Already-failed
+or already-stale checks stay failed without creating more checks on repeated
+pushes. Forks and PRs targeting other branches are not affected.
+
+GitHub may continue to report an older `pull_request.base.sha` after a
+base push. The trusted controller reads the **current default-branch tip**
+separately; historical PR metadata is not authority to treat a stale
+assessment as fresh. A new explicit review pins that current base, and the
+quality gate verifies the PR head and base again before publication.
+
+**On-demand refresh:** when a maintainer selects an eligible PR for merging,
+use [the manual dispatch](#run-or-retry-manually) for that PR at the current
+default-branch commit, then require a passing `sfstack quality`, ordinary CI
+and human approval. Refreshing an unrelated PR is never automatic. PR head
+changes, reopening and relevant metadata edits still trigger the existing
+PR-signal review path; they can use the new base.
 
 GitHub may also omit the PR association from an authenticated `workflow_run`
 event. The coordinator then finds an unambiguous same-repository open PR by
 matching both the signal's exact head SHA and branch name against GitHub's
 current pull request data; ambiguous matches cannot dispatch.
 
-Queuing revokes any previous result on the same PR head and creates a fresh
-pending check. Each new assessment generation gets a new check ID. The prior
-check becomes a historical **Quality assessment superseded** failure, with its
-original evidence link retained, so stale success cannot authorize the new
-assessment. An old red entry can therefore mean supersession rather than a newly
-observed defect; inspect the current generation and its linked run.
+Queued **PR-signal or explicit manual assessments** revoke any previous result
+on the same head and create a fresh pending check. A base-push invalidation
+instead creates a **completed failing check** without starting an assessment.
+Both paths use monotonically increasing check generations; the previous check
+becomes a historical **Quality assessment superseded** failure with its
+evidence link retained. An old red entry can represent supersession, not a
+newly observed defect. Only a fresh passing assessment for the pinned head/base
+can restore clearance.
 
 This is also how retries recover after a completed failure or success. GitHub
 can preserve a completed check's conclusion when an update requests a pending
@@ -156,8 +176,12 @@ integration does not implement a separate `check_run.rerequested` handler.
 
 ## Make the check required
 
-After the post-merge smoke test below, configure the default branch's ruleset or
-branch protection to require the check named exactly **`sfstack quality`**.
+**Required before enabling on-demand reassessment:** configure the default
+branch's ruleset or branch protection to require the check named exactly
+**`sfstack quality`**. The checks-only base-push failure does not itself
+prevent a maintainer with unprotected merge permissions from merging; GitHub
+must enforce the required check. Without that repository policy, this is a
+visible warning rather than a dependable merge gate.
 Where GitHub offers an expected source, select **GitHub Actions**. Also enable
 **Require branches to be up to date before merging** and retain existing test
 and human approval requirements.
@@ -177,6 +201,26 @@ This integration tests the PR head. It has no `merge_group` trigger and does not
 assess a synthesized merge-queue candidate. Add that distinct subject and its
 verification before enabling a merge queue for this check.
 
+## Cost control and further decoupling
+
+The base-push invalidation is metadata-only: it makes **zero full quality
+assessment dispatches** even if there are many open PRs. An already-failed
+check remains failed on later pushes, avoiding repeated check writes. No
+automatic green status is ever synthesized, and an in-flight assessment of the
+previous base cannot publish a late success. Manual refresh still runs the
+**whole** quality assessment for the chosen PR. A push can trigger a cheap
+invalidation job and individual check writes, but not model consumption.
+
+The **next** optimization is to split the required `sfstack quality` verdict
+into separate independently enforced `sfstack review` (AI evidence, cached
+against the immutable head/diff, criteria and reviewer-policy revision) and
+`sfstack integration` (deterministic checks against the current base/merge
+candidate). That needs new check names, a trusted cache/provenance contract,
+branch-protection changes, and regression tests that **deny merge when either
+required check is missing, stale or failed**. It is not implemented in this
+cost-control change: simply reusing an older AI verdict under the existing
+base-bound `sfstack quality` identity would relax the existing safety gate.
+
 ## What runs and where authority lives
 
 Three entry-point workflows separate event handling from candidate execution:
@@ -184,7 +228,7 @@ Three entry-point workflows separate event handling from candidate execution:
 | Workflow | Purpose | Boundary |
 | --- | --- | --- |
 | [sfstack-pr-signal.yml](../../.github/workflows/sfstack-pr-signal.yml) | Signal eligible PR activity. | No checkout, artifacts, secrets, or repository permissions. Its GitHub run metadata is only a hint to the coordinator. |
-| [sfstack-quality-events.yml](../../.github/workflows/sfstack-quality-events.yml) | Resolve current PRs, dispatch assessments, refresh after base pushes, and reconcile interrupted checks. | Runs trusted default-branch code, verifies source workflow identity through the API, and handles metadata only. Dispatch can write Actions and checks; reconciliation can write checks. |
+| [sfstack-quality-events.yml](../../.github/workflows/sfstack-quality-events.yml) | Dispatch PR-change assessments; invalidate stale quality checks on base pushes without re-review; reconcile interrupted checks. | Trusted default-branch jobs serialize check ownership. PR-signal dispatch has Actions write; base-push invalidation has **Actions read and checks write only**; reconciliation has checks write. |
 | [sfstack-quality.yml](../../.github/workflows/sfstack-quality.yml) | Pin inputs, verify, call the review workflow, consolidate, and publish. | All controller files come from its immutable default-branch revision. Only the start and publication jobs can write checks. |
 
 The controller's jobs have distinct responsibilities:

@@ -445,23 +445,161 @@ class GitHubAutomationTests(unittest.TestCase):
         self.assertEqual([], coordinator.dispatch(event)["dispatched"])
         self.assertEqual(writes, len(self.api.mutations))
 
-    def test_base_push_requeues_current_same_repository_prs(self):
+    def test_base_push_invalidates_success_without_dispatching_expensive_review(self):
         publication = self.start()
         self.check(publication).update({"status": "completed", "conclusion": "success"})
         self.api.tip = "c" * 40
-        # GitHub can keep reporting the previous base SHA after main advances.
+        # GitHub may keep returning the original PR base SHA after main moves.
         self.api.pulls[2] = FakeGitHub.pull(2, head_repository="outside/fork", base=self.api.tip)
         coordinator = self.new_host(200, EVENTS, "push", head=self.api.tip)
-        result = coordinator.dispatch({"ref": "refs/heads/main", "after": self.api.tip, "deleted": False})
-        self.assertEqual([1], result["dispatched"])
+        result = coordinator.invalidate({"ref": "refs/heads/main", "after": self.api.tip, "deleted": False})
+        self.assertEqual({"dispatched": [], "invalidated": [1]}, result)
         current = coordinator.find_check(self.api.pulls[1])
         self.assertNotEqual(publication["check_id"], current["id"])
         self.assertEqual("failure", self.check(publication)["conclusion"])
-        self.assertEqual("queued", current["status"])
+        self.assertEqual("completed", current["status"])
+        self.assertEqual("failure", current["conclusion"])
+        self.assertIn("revalidation required", current["output"]["title"])
+        self.assertIn("No AI review", current["output"]["summary"])
+        self.assertEqual("stale", check_owner(current)["k"])
         self.assertEqual(self.api.tip, check_owner(current)["b"])
+        self.assertFalse(any(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
         writes = len(self.api.mutations)
         self.assertFalse(self.host.publish(publication, "/absent", "success")["published"])
         self.assertEqual(writes, len(self.api.mutations))
+
+    def test_push_without_previous_owned_check_cannot_start_review(self):
+        self.api.tip = "c" * 40
+        coordinator = self.new_host(200, EVENTS, "push", head=self.api.tip)
+        result = coordinator.invalidate({"ref": "refs/heads/main", "after": self.api.tip})
+        self.assertEqual([], result["dispatched"])
+        self.assertEqual([], result["invalidated"])
+        self.assertEqual([], self.api.mutations)
+
+    def test_repeated_base_pushes_do_not_write_checks_or_start_reviews_when_already_negative(self):
+        publication = self.start()
+        self.check(publication).update({"status": "completed", "conclusion": "success"})
+        self.api.tip = "c" * 40
+        first = self.new_host(200, EVENTS, "push", head=self.api.tip)
+        self.assertEqual([1], first.invalidate({"ref": "refs/heads/main", "after": self.api.tip})["invalidated"])
+        last = first.find_check(self.api.pulls[1])
+        self.api.tip = "d" * 40
+        repeated = self.new_host(201, EVENTS, "push", head=self.api.tip)
+        writes = len(self.api.mutations)
+        result = repeated.invalidate({"ref": "refs/heads/main", "after": self.api.tip})
+        self.assertEqual([], result["invalidated"])
+        self.assertEqual(writes, len(self.api.mutations))
+        self.assertEqual(last["id"], repeated.find_check(self.api.pulls[1])["id"])
+        self.assertEqual("failure", last["conclusion"])
+
+    def test_failed_previous_check_stays_failed_without_unnecessary_push_writes(self):
+        publication = self.start()
+        self.check(publication).update({"status": "completed", "conclusion": "failure"})
+        self.api.tip = "c" * 40
+        coordinator = self.new_host(200, EVENTS, "push", head=self.api.tip)
+        writes = len(self.api.mutations)
+        self.assertEqual([], coordinator.invalidate({"ref": "refs/heads/main", "after": self.api.tip})["invalidated"])
+        self.assertEqual(writes, len(self.api.mutations))
+        # A selected manual assessment can still start for the new base.
+        manual = self.new_host(201, head=self.api.tip)
+        current = manual.start(1)["publication"]
+        self.assertEqual(self.api.tip, current["base_sha"])
+        self.assertEqual("in_progress", self.check(current)["status"])
+
+    def test_inflight_old_base_review_is_invalidated_and_cannot_publish(self):
+        publication = self.start()
+        self.api.tip = "c" * 40
+        coordinator = self.new_host(200, EVENTS, "push", head=self.api.tip)
+        self.assertEqual([1], coordinator.invalidate({"ref": "refs/heads/main", "after": self.api.tip})["invalidated"])
+        self.assertEqual("failure", self.check(publication)["conclusion"])
+        latest = coordinator.find_check(self.api.pulls[1])
+        self.assertEqual("stale", check_owner(latest)["k"])
+        writes = len(self.api.mutations)
+        self.assertFalse(self.host.publish(publication, "/absent", "success")["published"])
+        self.assertEqual(writes, len(self.api.mutations))
+
+    def test_stale_or_deleted_push_and_old_controller_cannot_invalidate_checks(self):
+        publication = self.start()
+        self.check(publication).update({"status": "completed", "conclusion": "success"})
+        self.api.tip = "c" * 40
+        old = self.new_host(200, EVENTS, "push", head=BASE)
+        current = self.new_host(201, EVENTS, "push", head=self.api.tip)
+        cases = [
+            (old, {"ref": "refs/heads/main", "after": self.api.tip}),
+            (current, {"ref": "refs/heads/release", "after": self.api.tip}),
+            (current, {"ref": "refs/heads/main", "after": BASE}),
+            (current, {"ref": "refs/heads/main", "after": self.api.tip, "deleted": True}),
+        ]
+        for host, event in cases:
+            with self.subTest(event=event):
+                writes = len(self.api.mutations)
+                self.assertEqual([], host.invalidate(event)["invalidated"])
+                self.assertEqual(writes, len(self.api.mutations))
+        self.assertEqual("success", self.check(publication)["conclusion"])
+
+    def test_push_cannot_invoke_action_dispatch_path(self):
+        self.api.tip = "c" * 40
+        coordinator = self.new_host(200, EVENTS, "push", head=self.api.tip)
+        with self.assertRaises(ValueError):
+            coordinator.dispatch({"ref": "refs/heads/main", "after": self.api.tip})
+        self.assertEqual([], self.api.mutations)
+
+    def test_many_open_prs_are_invalidated_once_not_n_squared_ai_reviews(self):
+        self.api.pulls = {}
+        for number in range(1, 6):
+            head = format(number + 9, "x") * 40
+            self.api.pulls[number] = FakeGitHub.pull(number, head=head)
+            self.api.checks[500 + number] = {
+                "id": 500 + number, "app": {"slug": "github-actions"},
+                "name": CHECK_NAME, "head_sha": head, "external_id": owner_text(
+                    owner(number, BASE, "run", 100, 1, "")),
+                "status": "completed", "conclusion": "success",
+                "output": {"title": "Earlier quality approval", "summary": "Passed on previous base"},
+            }
+        self.api.tip = "c" * 40
+        host = self.new_host(200, EVENTS, "push", head=self.api.tip)
+        result = host.invalidate({"ref": "refs/heads/main", "after": self.api.tip})
+        self.assertEqual([1, 2, 3, 4, 5], result["invalidated"])
+        self.assertEqual([], result["dispatched"])
+        self.assertEqual(5, sum(method == "POST" for method, _, _ in self.api.mutations))
+        self.assertFalse(any(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
+        self.assertTrue(all(host.find_check(self.api.pulls[n])["conclusion"] == "failure"
+                            for n in range(1, 6)))
+        self.api.tip = "d" * 40
+        next_host = self.new_host(201, EVENTS, "push", head=self.api.tip)
+        writes = len(self.api.mutations)
+        result = next_host.invalidate({"ref": "refs/heads/main", "after": self.api.tip})
+        self.assertEqual([], result["invalidated"])
+        self.assertEqual(writes, len(self.api.mutations))
+
+    def test_pr_signal_still_dispatches_after_stale_base_invalidation(self):
+        publication = self.start()
+        self.check(publication).update({"status": "completed", "conclusion": "success"})
+        self.api.tip = "c" * 40
+        invalidator = self.new_host(200, EVENTS, "push", head=self.api.tip)
+        invalidator.invalidate({"ref": "refs/heads/main", "after": self.api.tip})
+        coordinator = self.new_host(201, EVENTS, "workflow_run", head=self.api.tip)
+        signal = self.api.add_run(90, SIGNAL, "pull_request", status="completed", head=HEAD)
+        signal["head_branch"] = "candidate"
+        signal["pull_requests"] = [{"number": 1}]
+        self.assertEqual([1], coordinator.dispatch({
+            "action": "completed", "workflow_run": deepcopy(signal)})["dispatched"])
+        check = coordinator.find_check(self.api.pulls[1])
+        self.assertEqual("queued", check["status"])
+        self.assertEqual("request", check_owner(check)["k"])
+        self.assertEqual(self.api.tip, check_owner(check)["b"])
+
+    def test_base_push_and_pr_signal_are_isolated_by_actions_permission(self):
+        workflow = (ROOT / ".github/workflows/sfstack-quality-events.yml").read_text()
+        push = workflow[workflow.index("  invalidate:"):workflow.index("  reconcile:")]
+        signal = workflow[workflow.index("  dispatch:"):workflow.index("  invalidate:")]
+        self.assertIn("github.event_name == 'push'", push)
+        self.assertIn("automation.py invalidate", push)
+        self.assertIn("actions: read", push)
+        self.assertNotIn("actions: write", push)
+        self.assertIn("github.event_name == 'workflow_run'", signal)
+        self.assertIn("automation.py dispatch", signal)
+        self.assertIn("actions: write", signal)
 
     def test_cancelled_controller_reconciliation_only_fails_its_owned_check(self):
         publication = self.start()
