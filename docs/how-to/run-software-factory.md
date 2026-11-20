@@ -392,6 +392,74 @@ a new-base merge. If a draft exists but quality
 dispatch failed, run **sfstack GitHub quality** manually for that PR from the
 current default branch, using the [quality retry instructions](run-github.md#run-or-retry-manually).
 
+## Crash-safe publication and Quality Factory request recovery (#29)
+
+The trusted software publisher now reserves a **single pinned `sfstack quality`
+check-run** before sending its `workflow_dispatch` request. The check's
+ownership metadata contains the original Software Factory run ID and attempt,
+the PR number, exact default-branch base SHA, a SHA-256 of the PR title and
+body, a generation, and a stable `request-id=<software-run-id>-<attempt>`.
+The Quality Factory's existing `start` command claims that same queued
+generation when its authenticated controller starts. The publisher uses the
+same repository-wide quality-check write lock and is the **only** Software
+Factory job with `checks: write`; the Copilot, preparation, and verification
+jobs are unchanged. Only the separate Quality Factory controller can publish
+a passing quality verdict. This is **not** approval or merge permission.
+
+A normal POST to GitHub workflow dispatch returns **204 with no run ID**.
+A transport exception does not establish that GitHub rejected the request.
+The publisher therefore treats a previously reserved request as **at most
+once**. It reconciles an exact GitHub-owned queued/in-progress/completed
+Quality Factory run, but **never sends a second POST** merely because a
+workflow run has not yet appeared in a list response. A missing run is
+ambiguous due to asynchronous GitHub Actions delivery; require human
+reconciliation rather than risking competing controllers.
+
+| Durable stage | Evidence to inspect | Safe response to interrupted or lost API response |
+| --- | --- | --- |
+| Admission/agent submission | Current issue snapshot, run ID/attempt, exact allowed paths, agent artifact receipt SHA and immutable default SHA | If inputs or base changed, **dispatch anew** on current `main`; never reuse an unverified proposal. No PR when receipt, gate, or source differs. |
+| Trusted verification | `sfstack-software-result-<attempt>`: `gate.json`, proposal, candidate Git identities, baseline/RED/GREEN/full logs and digests | A failed/missing/expired result is **negative**. No privileged publication, regardless of any builder claim. |
+| Immutable blobs/tree/commit | Expected Git blob, tree and commit SHA in `candidate.json` | Their content-hash identity is reusable. A partially created unreferenced object grants no publication authority; revalidate on retry. |
+| Factory branch | `sfstack/issue-<issue>-<run>-<attempt>` pointing at the verified candidate SHA | Re-read the exact ref if POST responds ambiguously. Adopt only an exact match; never force-push, overwrite a different SHA or infer success from a similar branch name. |
+| Draft PR | One **open, draft, unmodified** PR on the exact factory branch/base/head, with unaltered generated acceptance text and evidence link | If POST response is lost, re-read matching PRs and validate the **whole identity**. Conflicting, closed, ready-for-review, modified or duplicated PRs require human intervention. The publisher will not reset human changes. |
+| Quality request reservation | The current PR head's `sfstack quality` check with a versioned `request` owner, matching PR intent digest, base, run/attempt and request ID | The publisher creates the reservation before dispatch. A retry discovers the existing owner and **does not** reserve a competing check. A mismatched or superseded owner is blocked. |
+| Quality controller dispatched | Authenticated GitHub Actions Quality workflow run, exact run-name request ID, pinned default SHA, PR number, unique run ID/attempt and matching published check owner | If a run exists, reconcile it without dispatching again. If none is visible after a loss, the request remains **uncertain**, never passing; do **not** retry dispatch automatically. Inspect pending Actions jobs and request ownership; an operator may start a **new manual** assessment only after reconciliation. |
+| Assessment completed | Current Quality Factory check and retained assessment artifacts, bound to PR head, live base, title/body and controller generation | A failed, stale, superseded, interrupted or missing assessment **cannot** be treated as passed. A new base/head or human-edited PR requires fresh proof. |
+
+The publisher retains `publication.json` on errors with `phase`,
+`branch`, `candidate_sha`, `base_sha`, `run_id`, `run_attempt`,
+`pull_request` (if known), `quality_request_id` and
+`quality_check_id` (if reserved), plus `reason`, `recovery` and
+`merge_authorized=false`. `quality_requested=null` means **unknown**,
+not an affirmative dispatched run or a green gate. The original failed
+run and its negative records remain historical evidence; a later recovery
+must not retroactively change its conclusion.
+
+**Retry guidance:** The deterministic mocked crash/replay regressions cover
+lost branch, PR, quality-check reservation and dispatch replies, and stale
+or conflicting state. The existing successful **change** example
+[run #44632044871](https://github.com/grove/sfstack/actions/runs/44632044871)
+and **defect** example
+[run #44771993268](https://github.com/grove/sfstack/actions/runs/44771993268)
+establish end-to-end draft/quality paths, but not the new crash recovery
+in live GitHub. A bounded, dummy-data **live recovery** test remains a
+separate acceptance step before extraction. Do not launch paid Copilot
+again solely to test publisher reconciliation. GitHub Actions reruns
+have a new `run_attempt`; rerunning only a failed job cannot borrow prior
+attempt artifacts. If the original run is no longer current or its
+evidence expired, use a separately authorized human recovery or a fresh
+maintainer-selected task.
+
+**Repository protections require an operator check:** In GitHub repository
+**Settings → Rules → Rulesets** (or branch protection), require the
+published `sfstack quality` check by the GitHub Actions app, an
+**up-to-date branch** and independent human review. Also require the
+ordinary CI checks. The check publisher does **not** configure branch
+rules; a visible green check by itself does not prohibit an unprotected
+merge. A connected GitHub app without administration access cannot
+verify or change this protection. Existing Actions runners execute
+candidate code under ordinary OS permissions, not a hardened sandbox.
+
 ## Troubleshoot the first live run
 
 Use this table to recognize common problems. None of the recoveries widens the
