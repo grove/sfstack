@@ -538,9 +538,10 @@ class GitHubAutomationTests(unittest.TestCase):
         self.assertEqual("in_progress", self.check(next_publication)["status"])
 
     def test_malformed_intent_fingerprint_cannot_be_trusted_for_deduplication(self):
-        previous, event = self.passing_auto_check()
         for bad in ("1" * 63, "bad", None, {"untrusted": True}):
             with self.subTest(fingerprint=bad):
+                self.api = FakeGitHub()
+                previous, event = self.passing_auto_check()
                 value = check_owner(previous)
                 if bad is None:
                     value.pop("t")
@@ -549,11 +550,18 @@ class GitHubAutomationTests(unittest.TestCase):
                 previous["external_id"] = owner_text(value)
                 if bad is not None:
                     self.assertIsNone(check_owner(previous))
+                    # A malformed check cannot be treated as a successful pass;
+                    # ignore it without editing or invalidating its result.
+                    coordinator = self.new_host(202, EVENTS, "workflow_run")
+                    writes = len(self.api.mutations)
+                    self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
+                    self.assertEqual("success", previous["conclusion"])
+                    self.assertEqual("queued", coordinator.find_check(self.api.pulls[1])["status"])
+                    self.assertGreater(len(self.api.mutations), writes)
                 else:
                     self.assertNotIn("t", check_owner(previous))
-        # After an invalid or unsigned older check, a new signal requests review.
-        coordinator = self.new_host(202, EVENTS, "workflow_run")
-        self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
+                    coordinator = self.new_host(202, EVENTS, "workflow_run")
+                    self.assertEqual([1], coordinator.dispatch(event)["dispatched"])
 
     def test_base_push_invalidates_success_without_dispatching_expensive_review(self):
         publication = self.start()
