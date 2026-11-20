@@ -103,10 +103,11 @@ class SoftwareFixture(unittest.TestCase):
         return response
 
     def submit(self, response):
-        raw = json.dumps(response)
+        raw = json.dumps(response).encode("utf-8")
+        (self.submission.parent / "proposal.json").write_bytes(raw)
         self.write(self.submission, {"items": [{
-            "type": "submit_change", "change_json": raw,
-            "change_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest()}]})
+            "type": "submit_change",
+            "change_sha256": hashlib.sha256(raw).hexdigest()}]})
 
     def verify(self, agent_result="success"):
         if self.result.exists():
@@ -331,8 +332,7 @@ class GitHubSoftwareTests(SoftwareFixture):
         response = self.response()
         outer = load_json(self.submission)
         submitted = outer["items"][0]
-        original = submitted["change_json"]
-        original_sha = submitted["change_sha256"]
+        self.assertNotIn("change_json", submitted)
 
         # Mimic v1.2.2's loss of escaped newline source, without real secrets.
         code = response["edits"][0]["content"]
@@ -344,7 +344,7 @@ class GitHubSoftwareTests(SoftwareFixture):
         altered = clean.replace("\\\\n", "(n/redacted)", 3)
         self.assertNotEqual(clean, altered)
         self.assertEqual(3, altered.count("(n/redacted)"))
-        submitted["change_json"] = altered
+        (self.submission.parent / "proposal.json").write_text(altered, encoding="utf-8")
         submitted["change_sha256"] = hashlib.sha256(clean.encode("utf-8")).hexdigest()
         self.write(self.submission, outer)
 
@@ -361,7 +361,7 @@ class GitHubSoftwareTests(SoftwareFixture):
         gate = load_json(self.result / "gate.json")
         self.assertFalse(gate["passed"])
         self.assertEqual("blocked", gate["status"])
-        self.assertIn("Safe-output transport changed", gate["reasons"][0])
+        self.assertIn("Agent proposal artifact changed after preflight", gate["reasons"][0])
         self.assertFalse((self.result / "candidate.json").exists())
         self.assertFalse((self.result / "logs" / "answer-behavior.txt").exists())
         self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
