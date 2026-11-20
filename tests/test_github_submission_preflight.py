@@ -88,6 +88,30 @@ class SubmissionPreflightTests(SoftwareFixture):
         self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
         self.assertEqual("", self.git("status", "--porcelain"))
 
+    def test_duplicate_keys_still_fail_without_optional_jsonschema_dependency(self):
+        """Copilot's isolated Python may not include controller-side packages."""
+        self.prepare()
+        response = self.response()
+        raw = json.dumps(response)
+        duplicate = raw[:-1] + ', "limitations": ["duplicate"]}'
+        source = self.directory / "proposal.json"
+        command = [
+            sys.executable, "-S", str(PREFLIGHT),
+            "--proposal", str(source),
+            "--schema", str(self.directory / "context/change.schema.json"),
+            "--template", str(self.directory / "context/change-template.json"),
+        ]
+        source.write_text(duplicate, encoding="utf-8")
+        rejected = subprocess.run(command, cwd=self.repo, capture_output=True, text=True, timeout=15)
+        self.assertNotEqual(0, rejected.returncode)
+        self.assertIn("Duplicate JSON key.", rejected.stderr)
+
+        source.write_text(raw, encoding="utf-8")
+        allowed = subprocess.run(command, cwd=self.repo, capture_output=True, text=True, timeout=15)
+        self.assertEqual(0, allowed.returncode, allowed.stderr)
+        self.assertIn("Full schema validation deferred", allowed.stdout)
+        self.assertIn("unique JSON keys", allowed.stdout)
+
     def test_rendered_instruction_requires_exact_raw_preflight_and_single_key(self):
         self.prepare()
         self.response()
