@@ -554,6 +554,7 @@ class SoftwareGitHub:
         self.base, self.issue, self.candidate = base, deepcopy(issue), deepcopy(candidate)
         self.repository = {"full_name": "fixture/software", "default_branch": "main"}
         self.workflow = {"id": 50, "path": ".github/workflows/sfstack-software.yml"}
+        self.quality_workflow = {"id": 51, "path": ".github/workflows/sfstack-quality.yml"}
         self.run = {"id": 1234, "run_attempt": 1, "workflow_id": self.workflow["id"],
                     "path": self.workflow["path"], "event": "workflow_dispatch",
                     "head_sha": base, "head_branch": "main", "actor": {"login": "maintainer"},
@@ -563,7 +564,11 @@ class SoftwareGitHub:
         self.artifacts = [{"id": 812, "name": "sfstack-software-result-1", "expired": False,
                            "workflow_run": {"id": 1234, "head_sha": base}}]
         self.refs, self.pulls, self.calls = [], [], []
+        self.checks, self.quality_runs = {}, {}
         self.fail_dispatch = False
+        self.lose_dispatch_response = False
+        self.lose_check_response = False
+        self.lose_branch_response = False
         self.lose_pull_response = False
         self.wrong_blob = self.wrong_tree = self.wrong_commit = False
         self.issue_reads = 0
@@ -587,8 +592,20 @@ class SoftwareGitHub:
             value = {"object": {"sha": self.base}}
         elif suffix == "/actions/workflows/sfstack-software.yml":
             value = self.workflow
+        elif suffix == "/actions/workflows/sfstack-quality.yml":
+            value = self.quality_workflow
         elif suffix == "/actions/runs/1234":
             value = self.run
+        elif re.fullmatch(r"/actions/runs/[0-9]+", suffix):
+            value = self.quality_runs[int(suffix.rsplit("/", 1)[-1])]
+        elif suffix == "/actions/workflows/sfstack-quality.yml/runs":
+            value = {"workflow_runs": list(self.quality_runs.values()) if page == 1 else []}
+        elif re.fullmatch(r"/commits/[a-f0-9]{40}/check-runs", suffix):
+            head = suffix.split("/")[2]
+            value = {"check_runs": [check for check in self.checks.values()
+                                     if check["head_sha"] == head] if page == 1 else []}
+        elif re.fullmatch(r"/check-runs/[0-9]+", suffix):
+            value = self.checks[int(suffix.rsplit("/", 1)[-1])]
         elif suffix == "/collaborators/maintainer/permission":
             value = {"permission": self.permission}
         elif suffix == "/issues/7":
@@ -635,6 +652,8 @@ class SoftwareGitHub:
                 raise AssertionError("A factory branch must not be recreated or overwritten.")
             reference = {"ref": body["ref"], "object": {"sha": body["sha"]}}
             self.refs.append(reference)
+            if self.lose_branch_response:
+                raise ValueError("Fixture lost the branch creation response after the write.")
             return deepcopy(reference)
         if suffix == "/pulls":
             if self.pulls:
@@ -643,17 +662,50 @@ class SoftwareGitHub:
                     "title": body["title"],
                     "head": {"sha": self.refs[0]["object"]["sha"], "ref": body["head"],
                              "repo": {"full_name": "fixture/software"}},
-                    "base": {"ref": body["base"], "repo": {"full_name": "fixture/software"}},
+                    "base": {"sha": self.base, "ref": body["base"],
+                             "repo": {"full_name": "fixture/software"}},
                     "body": body["body"]}
             self.pulls.append(pull)
             if self.lose_pull_response:
                 raise ValueError("Fixture lost the PR creation response after the write.")
             return deepcopy(pull)
+        if suffix == "/check-runs":
+            identifier = max(self.checks, default=500) + 1
+            check = {"id": identifier, "app": {"slug": "github-actions"},
+                     "conclusion": None, "completed_at": None, **deepcopy(body)}
+            self.checks[identifier] = check
+            if self.lose_check_response:
+                raise ValueError("Fixture lost the quality check reservation reply.")
+            return deepcopy(check)
         if suffix == "/actions/workflows/sfstack-quality.yml/dispatches":
             if self.fail_dispatch:
                 raise ValueError("Fixture quality dispatch is unavailable.")
+            identifier = max(self.quality_runs, default=900) + 1
+            request = body["inputs"]
+            self.quality_runs[identifier] = {
+                "id": identifier, "run_attempt": 1, "workflow_id": self.quality_workflow["id"],
+                "path": self.quality_workflow["path"], "event": "workflow_dispatch",
+                "repository": deepcopy(self.repository), "head_repository": deepcopy(self.repository),
+                "head_branch": "main", "head_sha": self.base, "status": "queued", "conclusion": None,
+                "display_title": "sfstack quality / PR #" + request["pr-number"]
+                                 + " / request " + request["request-id"],
+            }
+            if self.lose_dispatch_response:
+                raise ValueError("Fixture lost the quality dispatch reply after the write.")
             return None
         raise AssertionError("Unexpected mutation: " + path)
+
+    def patch(self, path, body):
+        self.calls.append(("PATCH", path, deepcopy(body)))
+        prefix = "repos/fixture/software"
+        suffix = path[len(prefix):]
+        if re.fullmatch(r"/check-runs/[0-9]+", suffix):
+            check = self.checks[int(suffix.rsplit("/", 1)[-1])]
+            check.update(deepcopy(body))
+            if check.get("conclusion") is not None:
+                check["status"] = "completed"
+            return deepcopy(check)
+        raise AssertionError("Unexpected patch: " + path)
 
 
 class GitHubSoftwarePublicationTests(SoftwareFixture):
