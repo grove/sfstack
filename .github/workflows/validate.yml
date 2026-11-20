@@ -68,6 +68,18 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Execute defect repair RED/GREEN and negative controls
+        if: matrix.python-version == '3.11'
+        run: python evals/run_defect_regression.py --output dist/defect-regression
+      - name: Upload defect repair evidence
+        if: always() && matrix.python-version == '3.11'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: defect-regression
+          path: dist/defect-regression
+          if-no-files-found: error
+          retention-days: 14
+
   agentic_workflows:
     name: Validate Agentic Workflows compilation
     runs-on: ubuntu-latest

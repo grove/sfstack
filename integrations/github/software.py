@@ -31,7 +31,7 @@ from factory import plan
 from jsonschema import Draft202012Validator
 from quality_report import report_status
 from render_invocation import render as render_skill
-from integrations.github import automation, quality
+from integrations.github import automation, quality, defect
 
 HERE = Path(__file__).resolve().parent
 WORKFLOW = "sfstack-software.yml"
@@ -131,7 +131,8 @@ def file_snapshot(repo, path):
 
 
 def prepare(repo, issue, repository, run_id, run_attempt, allowed_paths, acceptance_criteria,
-            output, at=None, checks=None, actor="maintainer", base_branch="main"):
+            output, at=None, checks=None, actor="maintainer", base_branch="main",
+            mode="change", regression_file=None):
     at = (at or now()).replace(microsecond=0)
     repo, output = Path(repo).resolve(), Path(output).resolve()
     if (not quality.REPOSITORY.fullmatch(repository)
@@ -152,12 +153,14 @@ def prepare(repo, issue, repository, run_id, run_attempt, allowed_paths, accepta
         files[path] = {**info, "original": f"original/{index}.txt" if raw is not None else None}
         if raw is not None:
             originals[files[path]["original"]] = raw
+    mode_config = defect.configuration(mode, regression_file, selected, files)
     target = {"repository": repository, "issue": snapshot, "base_sha": base,
               "base_tree_sha": git(repo, "rev-parse", "HEAD^{tree}").decode().strip(),
               "base_branch": base_branch, "actor": actor, "run_id": str(run_id),
               "run_attempt": str(run_attempt), "allowed_files": files, "criteria": acceptance,
               "checks": checks, "created_at": at.isoformat().replace("+00:00", "Z"),
-              "environment": f"github-actions-python-{sys.version_info.major}.{sys.version_info.minor}"}
+              "environment": f"github-actions-python-{sys.version_info.major}.{sys.version_info.minor}",
+              **mode_config}
     output.mkdir(parents=True)
     for path, raw in originals.items():
         destination = output / path
@@ -209,6 +212,10 @@ def load_bundle(bundle, at):
             or load_json(bundle / "workflow.json") != load_json(HERE / "software-workflow.json")):
         raise ValueError("Software inputs changed, expired, or belong to another subject.")
     allowed_files(list(target["allowed_files"]))
+    if defect.configuration(target.get("mode"), target.get("regression_file"),
+                            list(target["allowed_files"]), target["allowed_files"]) != {
+                                "mode": target["mode"], "regression_file": target["regression_file"]}:
+        raise ValueError("Invalid pinned defect repair configuration.")
     if target["criteria"] != criteria([c["description"] for c in target["criteria"]]):
         raise ValueError("Invalid acceptance criteria identities.")
     quality.check_plan(target["checks"])
@@ -233,6 +240,10 @@ def render(bundle, candidate, output, at=None):
     template = {"run_id": run["run_id"], "subject": run["subject"], "status": "inconclusive",
         "summary": "Replace with the supported build outcome.", "criteria_addressed": [],
         "behavior_changes": [], "checks_run": [], "remaining_work": [], "edits": []}
+    if target["mode"] == "defect":
+        template["diagnosis"] = {
+            **{field: "" for field in defect.FIELDS},
+            **{field: [] for field in defect.LIST_FIELDS}}
     write_json(output / "change-template.json", template)
     shutil.copyfile(HERE / "change.schema.json", output / "change.schema.json")
     context = {"run_id": run["run_id"], "subject": run["subject"], "capabilities": run["capabilities"],
@@ -249,8 +260,31 @@ def render(bundle, candidate, output, at=None):
                 "unmet criteria or implementation blockers; ordinary human PR "
                 "review occurs after the draft and belongs in the summary. "
                 "Never hide genuine blockers to claim a pass.\n")
-    (output / "invocation.md").write_text(render_skill("sf-build-change", context) + guidance,
-                                           encoding="utf-8")
+    invocation = render_skill("sf-build-change", context) + guidance
+    if target["mode"] == "defect":
+        diagnosis_context = {
+            "run_id": run["run_id"], "subject": run["subject"],
+            "capabilities": ["workspace.read", "execution.run", "artifact.write"],
+            "authorized_effects": [],
+            "inputs": {
+                "request": {"issue": target["issue"], "criteria": target["criteria"]},
+                "project-context": {"revision": target["base_sha"],
+                                    "candidate_directory": str(Path(candidate).resolve()),
+                                    "regression_file": target["regression_file"],
+                                    "trusted_check": defect.check(target)}},
+            "limits": "Diagnose before implementation; no publishing, no extra paths or authority."}
+        invocation = (
+            "# Defect mode: mandatory ordered phases\n\n"
+            "First apply sf-diagnose-defect to the pinned base and reproduce the reported symptom. "
+            "Record the mechanism, a plausible alternative, discriminating experiment, and uncertainties. "
+            "Next use sf-build-change to add the exact NEW regression file and make the smallest fix. "
+            "The fresh trusted host will require baseline GREEN, regression RED on the test-only base, "
+            "regression GREEN on the repair, and all host checks GREEN. The agent's own checks are "
+            "not authoritative. Populate every diagnosis field in the change submission; if reproduction "
+            "or diagnosis fails, submit a nonpassing status.\n\n"
+            + render_skill("sf-diagnose-defect", diagnosis_context)
+            + "\n# Implementation phase (after diagnosis)\n\n" + invocation)
+    (output / "invocation.md").write_text(invocation, encoding="utf-8")
     return {"status": "rendered", "skill": "sf-build-change"}
 
 
@@ -321,6 +355,7 @@ def load_response(path, run, target):
             raise ValueError("Agent edit is binary or exceeds the content budget.")
         if sha256(raw_content) == target["allowed_files"][edit["path"]]["sha256"]:
             raise ValueError("Agent submitted an unchanged file.")
+    defect.validate_response(response, target)
     return response, raw
 
 
@@ -370,6 +405,11 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
         actual, _ = file_snapshot(repo, path)
         if any(actual[key] != expected[key] for key in actual):
             raise ValueError("Candidate no longer matches the pinned base file evidence.")
+    preflight = None
+    if target["mode"] == "defect":
+        preflight = defect.reproduce(repo, target, response, output)
+        if preflight["status"] != "passed":
+            return defect.retain_negative(output, preflight)
     candidate, diff = candidate_record(repo, target, response["edits"])
     if candidate["tree_sha"] == target["base_tree_sha"]:
         raise ValueError("Builder produced no change.")
@@ -393,7 +433,11 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
                        "detail": json.dumps(result, sort_keys=True)})
     quality.check_candidate(repo, candidate["head_sha"])
     observed = fixed_time or now()
-    status = report_status({r["status"] for r in results})
+    regression = defect.green(repo, target, candidate, output) if preflight else None
+    defect_record = defect.finalize(output, run, target, response, candidate,
+                                    preflight, regression, observed) if preflight else None
+    status = report_status({r["status"] for r in results} |
+                           ({defect_record["status"]} if defect_record else set()))
     verify_run = {"run_id": run["run_id"] + "-verify", "subject": {"revision": candidate["head_sha"],
                   "input_digest": digest(output / "candidate.json"), "environment": target["environment"]}}
     payload = {"candidate_revision": candidate["head_sha"], "environment": target["environment"],
@@ -408,13 +452,21 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
              quality.evidence(output / "diff.patch", "candidate-diff", "diff"),
              quality.evidence(output / "candidate.json", "candidate-identity", "input"),
              quality.evidence(output / "verification-report.json", "verification-report", "observation"), *evidence]
+    if defect_record:
+        proof.extend([
+            quality.evidence(output / "defect-evidence.json", "defect-evidence", "observation"),
+            quality.evidence(output / "diagnosis.json", "defect-diagnosis", "analysis"),
+            quality.evidence(output / "red.patch", "red-test-diff", "diff"),
+            quality.evidence(output / "logs/red-regression.txt", "red-regression", "test", "logs/red-regression.txt"),
+            quality.evidence(output / "logs/green-regression.txt", "green-regression", "test", "logs/green-regression.txt")])
     change = quality.artifact(run, "change-set", "sf-build-change", status, {
         "work_item": f"issue-{target['issue']['number']}", "criteria_addressed": response["criteria_addressed"],
         "base_revision": target["base_sha"], "candidate_revision": candidate["head_sha"],
         "changed_paths": [e["path"] for e in candidate["edits"]], "behavior_changes": response["behavior_changes"],
         "checks_run": results, "agent_checks_claimed": response["checks_run"], "compatibility_notes": [],
         "documentation_needs": [], "remaining_work": response["remaining_work"],
-        "verification_subject": verify_run["subject"], "acceptance_basis": "Builder claims plus measured host checks; independent quality and human review remain."},
+        "verification_subject": verify_run["subject"], "acceptance_basis": "Builder claims plus measured host checks; independent quality and human review remain.",
+        **({"diagnosis_artifact": "diagnosis.json", "defect_evidence": "defect-evidence.json"} if defect_record else {})},
         proof, [{"id": "host-verification", "status": status, "evidence": ["verification-report"],
                  "detail": "Fresh host reconstructed only scoped files and executed the fixed check plan."}], observed)
     change["summary"] = response["summary"]
@@ -431,15 +483,24 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
             write_json(checkpoint / "run.json", completed)
             if plan(checkpoint / "workflow.json", checkpoint / "run.json", observed)["status"] != "complete":
                 raise ValueError("Completed build does not satisfy its skill handoff.")
+    retained = ["candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json"]
+    if defect_record:
+        retained += ["defect-evidence.json", "diagnosis.json", "red.patch"]
     gate = {"status": status, "passed": status == "passed", "candidate_sha": candidate["head_sha"],
             "subject": verify_run["subject"], "input_digest": run["subject"]["input_digest"],
-            "digests": {name: digest(output / name) for name in ("candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json")},
+            "digests": {name: digest(output / name) for name in retained},
             "mutation_authorized": False, "reasons": [] if status == "passed" else ["Required candidate verification did not pass."]}
     write_json(output / "gate.json", gate)
     lines = ["# sfstack software factory", "", f"**Verdict: {status}**", "",
         f"Issue: {target['issue']['url']}", "", f"Candidate: `{candidate['head_sha']}`", "",
         "| Host check | Status |", "| --- | --- |"]
     lines += [f"| {r['id']} | {r['status']} |" for r in results]
+    if defect_record:
+        lines += ["", "## Defect evidence (fresh host)", "",
+                  f"Base suite: {len(preflight['baseline'])} required checks passed.",
+                  f"RED: {defect_record['red']['tests_run']} tests; real assertion failure on `{preflight['red_head_sha']}`.",
+                  f"GREEN: {defect_record['green']['tests_run']} tests; {defect_record['green']['status']} on `{candidate['head_sha']}`.",
+                  "See red.patch, diagnosis.json, defect-evidence.json and logs for the exact commands and outputs."]
     lines += ["", "The build preserves the original issue, acceptance criteria, base, scoped edits, agent claims, and actual host logs.",
               "A passing build may be published as a draft. The separate Quality Factory and human review remain required; no merge is authorized."]
     (output / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -459,7 +520,8 @@ class SoftwareHost(automation.Host):
             raise ValueError("Default branch advanced; dispatch a fresh Software Factory run.")
         return repository, source, actor
 
-    def prepare(self, repo, issue_number, paths, acceptance, output, at=None):
+    def prepare(self, repo, issue_number, paths, acceptance, output, at=None,
+                mode="change", regression_file=None):
         repository, _, actor = self.admitted()
         if not automation.positive(issue_number):
             raise ValueError("Expected a positive issue number.")
@@ -469,7 +531,8 @@ class SoftwareHost(automation.Host):
         if issue.get("number") != issue_number:
             raise ValueError("Issue identity mismatch.")
         return prepare(repo, issue, self.repository, self.run_id, self.attempt, paths, acceptance, output,
-                       at=at, actor=actor, base_branch=repository["default_branch"])
+                       at=at, actor=actor, base_branch=repository["default_branch"],
+                       mode=mode, regression_file=regression_file)
 
     def current(self, target):
         repository, _, actor = self.admitted()
@@ -489,7 +552,9 @@ class SoftwareHost(automation.Host):
         if (gate.get("passed") is not True or gate.get("status") != "passed" or gate.get("reasons") != []
                 or gate.get("mutation_authorized") is not False or gate.get("input_digest") != run["subject"]["input_digest"]
                 or gate.get("candidate_sha") != candidate.get("head_sha")
-                or set(gate.get("digests", {})) != {"candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json"}
+                or set(gate.get("digests", {})) != (
+                     {"candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json"}
+                     | ({"defect-evidence.json", "diagnosis.json", "red.patch"} if target["mode"] == "defect" else set()))
                 or any(digest(result / path) != value for path, value in gate["digests"].items())):
             raise ValueError("Build gate is negative, incomplete, or its evidence was modified.")
         response, _ = load_response(result / "submission.json", run, target)
@@ -519,6 +584,8 @@ class SoftwareHost(automation.Host):
                         or selected["kind"] == "unittest" and (type(observed.get("tests_run")) is not int
                             or observed["tests_run"] < 1 or observed.get("tests_skipped") != 0 or observed.get("expected_failures") != 0)):
                     problems.append("Verification lacks a substantive passing host check.")
+        if target["mode"] == "defect":
+            defect.validate_evidence(repo, target, candidate, response, result, run, at, MAX_AGE)
         if problems:
             raise ValueError("Invalid build evidence: " + "; ".join(problems))
         artifacts = self.pages(f"actions/runs/{self.run_id}/artifacts", "artifacts")
@@ -559,9 +626,11 @@ class SoftwareHost(automation.Host):
         pulls = self.pages("pulls?" + urlencode({"state": "all", "head": self.repository.split('/')[0] + ":" + branch}))
         evidence_url = f"https://github.com/{self.repository}/actions/runs/{self.run_id}/artifacts/{artifact['id']}"
         title = f"[sfstack] {target['issue']['title']}"[:240]
+        defect_record = load_json(result / "defect-evidence.json") if target["mode"] == "defect" else None
         body = "\n".join([
             f"Implements the selected increment from #{target['issue']['number']}.", "",
             "## Acceptance criteria", "", *[f"- {c['description']}" for c in target['criteria']], "",
+            *(defect.pr_section(target, defect_record) if defect_record else []),
             "## Evidence", "", f"- [Build evidence and retained host logs]({evidence_url})",
             f"- Base: `{target['base_sha']}`", f"- Verified candidate: `{candidate['head_sha']}`", "",
             "Created by sfstack's bounded Software Factory. Local verification passed. A separate Quality Factory assessment is requested for this exact head.",
@@ -619,6 +688,8 @@ def main(argv=None):
     prep = commands.add_parser("prepare")
     for name in ("repo", "issue-number", "allowed-paths", "acceptance-criteria", "out"):
         prep.add_argument("--" + name, required=True)
+    prep.add_argument("--mode", choices=("change", "defect"), default="change")
+    prep.add_argument("--regression-file", default="")
     rendering = commands.add_parser("render")
     for name in ("bundle", "candidate", "out"):
         rendering.add_argument("--" + name, required=True)
@@ -636,7 +707,8 @@ def main(argv=None):
             quality.check_actions_run(args.bundle)
         if args.command == "prepare":
             result = host.prepare(args.repo, int(args.issue_number), automation.strict_json(args.allowed_paths),
-                                  automation.strict_json(args.acceptance_criteria), args.out)
+                                  automation.strict_json(args.acceptance_criteria), args.out,
+                                  mode=args.mode, regression_file=args.regression_file)
         elif args.command == "render":
             result = render(args.bundle, args.candidate, args.out)
         elif args.command == "verify":
