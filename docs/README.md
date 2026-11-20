@@ -34,6 +34,7 @@ precise information, and understanding the design are different activities.
 - [Capabilities, effects, and authorization](reference/capabilities.md).
 - [Workflow recipes](reference/workflows.md).
 - [Development and reference tools](reference/tooling.md).
+- [Versioned public contract and gate CLI](reference/public-cli.md).
 
 ## Explanation — understand the decisions
 

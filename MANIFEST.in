@@ -1,0 +1,3 @@
+recursive-include schemas *.json
+recursive-include skills *.json *.md
+recursive-include workflows *.json

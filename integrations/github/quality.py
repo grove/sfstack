@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 from common import (contained_path, inspect_artifact, load_json, now, read_regular,
                     validate_schema)
-from factory import evaluate_gate, plan
+from factory import plan
 from quality_report import consolidate, report_status
 from render_invocation import render as render_skill
 from jsonschema import Draft202012Validator
@@ -41,6 +41,40 @@ def write_json(path, value):
 def digest(path):
     return hashlib.sha256(read_regular(path)).hexdigest()
 
+
+def evaluate_public_gate(request, policy, at):
+    """Call the published JSON/exit-code contract, not an internal policy import.
+
+    The self-hosted adapter still locates the CLI in its trusted controller
+    checkout. An extracted host will install a pinned wheel and invoke the
+    sfstack-contract executable instead.
+    """
+    command = [sys.executable, str(ROOT / "tools" / "contract_cli.py"), "gate",
+               "--request", str(Path(request).resolve()),
+               "--policy", str(Path(policy).resolve()),
+               "--at", at.isoformat().replace("+00:00", "Z")]
+    observed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=60)
+    if observed.returncode not in (0, 2):
+        raise ValueError("sfstack public gate returned an invalid invocation or failed to run.")
+    try:
+        response = json.loads(observed.stdout)
+        result = response["result"]
+        decision = result["decision"]
+        status = response["status"]
+        if (response["interface_version"] != "1.0"
+                or response["distribution_version"] != "1.0.0"
+                or response["operation"] != "gate"
+                or response["errors"] != []
+                or decision not in {"allowed", "blocked"}
+                or not isinstance(result["reasons"], list)
+                or not isinstance(result["effect"], str)
+                or not isinstance(result["scope"], str)
+                or (observed.returncode, status, decision) not in {
+                    (0, "passed", "allowed"), (2, "blocked", "blocked")}):
+            raise ValueError("Unexpected sfstack public gate response envelope.")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise ValueError("Malformed sfstack public gate response.") from exc
+    return response
 
 def evidence(path, identifier, kind, uri=None):
     return {"id": identifier, "kind": kind, "uri": uri or Path(path).name,
@@ -515,7 +549,9 @@ def finalize(bundle, verification, review_path, current_pr_path, agent_result, o
                     "effect": "integration.modify", "scope": f"github:{target['repository']}:{target['pull_request']}:{target['head_sha']}",
                     "artifacts": ["assessment/quality-assessment.json"]}
     write_json(output / "gate-request.json", gate_request)
-    authorization = evaluate_gate(output / "gate-request.json", output / "policy.json", at)
+    public_response = evaluate_public_gate(output / "gate-request.json", output / "policy.json", at)
+    write_json(output / "authorization-interface.json", public_response)
+    authorization = public_response["result"]
     write_json(output / "authorization-gate.json", authorization)
     gate = {"status": result["status"], "success": result["status"] == "passed", "reasons": problems,
             "assessment": "assessment/quality-assessment.json", "subject": run["subject"],
