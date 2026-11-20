@@ -299,7 +299,7 @@ class GitHubSoftwareTests(SoftwareFixture):
             "remaining_work": [],
             "limitations": ["The quality reviewer must still inspect the scope.",
                             "More hardening may be useful outside this issue."],
-            "edits": [{"path": "examples/answer.py", "content": "answer = 42\\n"}],
+            "edits": [{"path": "examples/answer.py", "content": "answer = 42" + chr(10)}],
         })
         self.submit(response)
         gate = self.verify()
