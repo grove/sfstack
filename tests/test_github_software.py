@@ -365,7 +365,7 @@ class GitHubSoftwareTests(SoftwareFixture):
         self.assertFalse((self.result / "candidate.json").exists())
         self.assertFalse((self.result / "logs" / "answer-behavior.txt").exists())
         self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
-        self.assertEqual("answer = 41\\n", (self.repo / "examples/answer.py").read_text())
+        self.assertEqual("answer = 41\n", (self.repo / "examples/answer.py").read_text())
 
     def test_checksum_is_required_and_verified_independently_of_builder_claim(self):
         self.prepare()
