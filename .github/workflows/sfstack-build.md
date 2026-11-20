@@ -60,6 +60,9 @@ safe-outputs:
             ref: ${{ github.workflow_sha }}
             path: controller
             persist-credentials: false
+        - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+          with:
+            python-version: '3.13'
         - name: Stage fixed, compiler-redacted proposal and receipt
           run: >-
             python controller/integrations/github/stage_change_artifact.py
