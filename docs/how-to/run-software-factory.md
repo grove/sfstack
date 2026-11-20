@@ -125,6 +125,12 @@ trusted controller:
    revision, runs a fixed `unittest discover` command and demands an actual
    assertion failure (RED). A passing, skipped, empty, timed-out, or import-error
    test does not count.
+   For regressions that themselves run a nested `unittest` suite, the trusted
+   defect checker reads the **final outer** runner summary and assertion
+   verdict, rather than confusing inner diagnostics for the outer test count.
+   Its final result still must show an executed failing assertion, no errors,
+   skips or expected failures, and an intact terminal summary. Ordinary
+   full-suite verification retains its stricter single-summary requirement.
 3. Restores the base and reconstructs the **exact test plus minimal scoped
    implementation** from complete UTF-8 replacements, measuring immutable Git
    tree and commit identities.

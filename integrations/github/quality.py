@@ -230,7 +230,22 @@ def check_actions_run(bundle, environment=None):
         raise ValueError("Input artifacts belong to another GitHub run or attempt; rerun all jobs.")
 
 
-def run_check(check, repo, log_path):
+def terminal_unittest_summary(text):
+    """The *outer* unittest summary must terminate the observed runner log.
+
+    A regression can execute another unittest runner and quote its failed log
+    in an outer assertion. Its inner summary must not be mistaken for the
+    authoritative outer result; the final summary/outcome pair must be intact.
+    """
+    match = re.search(
+        r"^Ran ([0-9]+) tests? in [^\r\n]+\r?\n\r?\n"
+        r"(OK|FAILED)(?: \(([^\r\n()]*)\))?[ \t]*(?:\r?\n)*\Z",
+        text, re.MULTILINE,
+    )
+    return (int(match.group(1)), match.group(2), match.group(3) or "") if match else None
+
+
+def run_check(check, repo, log_path, *, nested_unittest=False):
     command = list(check["command"])
     if command[0] == "python":
         command[0] = sys.executable
@@ -250,15 +265,19 @@ def run_check(check, repo, log_path):
         if check["kind"] == "unittest":
             text = raw.decode("utf-8", "replace")
             summaries = re.findall(r"^Ran (\d+) tests? in [^\r\n]+$", text, re.MULTILINE)
-            # Exactly one summary is required; an absent/ambiguous summary does
-            # not prove discovery. Logs are ordinary CI evidence, not an
-            # attestation against a malicious test program forging its output.
-            count = int(summaries[0]) if len(summaries) == 1 else None
+            # Full-suite verification remains strict. Only the trusted defect
+            # regression may interpret the terminal outer summary when nested
+            # unittest output appears in an assertion's diagnostic text.
+            terminal = terminal_unittest_summary(text) if nested_unittest else None
+            count = (terminal[0] if terminal else None) if nested_unittest else (
+                int(summaries[0]) if len(summaries) == 1 else None)
             outcomes = re.findall(r"^(?:OK|FAILED)(?: \(([^\r\n]*)\))?$", text, re.MULTILINE)
             skipped = sum(int(value) for detail in outcomes for value in re.findall(r"\bskipped=(\d+)", detail))
             expected_failures = sum(int(value) for detail in outcomes
                                     for value in re.findall(r"\bexpected failures=(\d+)", detail))
-            if code == 0 and (count is None or count == 0 or skipped or expected_failures or len(outcomes) != 1):
+            if code == 0 and (count is None or count == 0 or skipped or expected_failures
+                              or (nested_unittest and terminal[1] != "OK" if terminal else False)
+                              or (not nested_unittest and len(outcomes) != 1)):
                 status = "inconclusive"
     except subprocess.TimeoutExpired:
         executed, status = True, "blocked"
