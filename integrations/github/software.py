@@ -674,6 +674,10 @@ class SoftwareHost(automation.Host):
         return target, candidate, matches[0]
 
     def publish(self, bundle, result, repo, at=None):
+        # CLI arguments arrive as strings. The verifier accepts and normalizes
+        # both forms, but later PR-description/evidence reads require Path.
+        # Normalize once after entering the trusted publisher boundary.
+        result = Path(result)
         target, candidate, artifact = self.validate_result(bundle, result, repo, at or now())
         # Objects are immutable and harmless until referenced. Never execute
         # candidate files in this job, which alone has repository write scopes.
