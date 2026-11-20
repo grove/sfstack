@@ -8,6 +8,7 @@ and verification evidence are real. No GitHub API or model is called here.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -55,7 +56,10 @@ def exercise(directory, repo, issue, checks, run_id, source, at):
         "edits": [{"path": "examples/inventory.py", "content": source}],
     })
     submission = directory / "submission.json"
-    write_json(submission, {"items": [{"type": "submit_change", "change_json": json.dumps(response)}]})
+    raw = json.dumps(response)
+    write_json(submission, {"items": [{"type": "submit_change",
+                                     "change_json": raw,
+                                     "change_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest()}]})
     result = software.verify(repo, bundle, submission, "success", result_path, at=at)
     candidate = load_json(result_path / "candidate.json")
     report = load_json(result_path / "verification-report.json")
