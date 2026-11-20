@@ -196,66 +196,75 @@ them in the change-set and draft PR but does **not** treat them as verified
 claims. Actual unmet criteria always require a nonpassing result; never move
 blockers into `limitations` to clear a gate.
 
-For the actual `submit_change.change_json` handoff, the Copilot builder must
-construct **one dictionary** from the rendered `change-template.json`, update
-existing keys (including the already-present `limitations` list), and serialize
-it once. Manual JSON concatenation can create duplicate properties; normal
-`json.loads` silently overwrites them and is **not** a safe validator. Before
-`submit_change`, the builder writes the **exact raw JSON string it will submit**
-to a scratch file outside `candidate/` and runs the unprivileged
-[`preflight_change.py`](../../integrations/github/preflight_change.py) helper
-against the rendered closed schema and pinned identity:
+For each \`submit_change\` submission, Copilot must construct **one dictionary**
+from the rendered \`change-template.json\`, update existing keys (including the
+already-present \`limitations\` list), and serialize it **once** to the fixed
+file \`/tmp/gh-aw/agent/sfstack-software/proposal.json\`. Concatenating JSON
+can create duplicate keys; plain \`json.loads\` silently discards them and is
+**not** a safe validator. Before submitting, the agent runs the preflight on
+this exact file in its GitHub Actions workspace:
 
-```sh
+\`\`\`sh
+mkdir -p /tmp/gh-aw/agent/sfstack-software
 python controller/integrations/github/preflight_change.py \
-  --proposal /tmp/gh-aw/sfstack-software/proposal.json \
+  --proposal /tmp/gh-aw/agent/sfstack-software/proposal.json \
   --schema /tmp/gh-aw/sfstack-software/context/change.schema.json \
   --template /tmp/gh-aw/sfstack-software/context/change-template.json
-```
+\`\`\`
 
-The command above runs **inside the builder's GitHub Actions workspace**.
-If it fails, the agent must correct its source response and rerun preflight;
-it must not silently normalize an ambiguous payload. The agent then sends
-exactly the tested file bytes as `change_json`, with no further edits.
-Preflight success alone **never** authorizes a PR. The trusted host separately
-enforces duplicate rejection, exact paths and identities, behavioral RED/GREEN,
-full verification, independent Quality Factory and human review.
+If preflight fails, the agent corrects its source object, writes a new file
+and rechecks. When it passes, the agent calls \`submit_change\` **once**, with
+the \`change_sha256\` field set to the printed lowercase SHA-256 digest.
+**No source-code JSON goes into any safe-output text input.** That text
+channel can apply URL-protocol sanitization and corrupt escaped code.
 
-### Safe-output transport integrity (v0.2 incident #20)
+### Compiler-redacted agent-file transport (issue #20)
 
-The custom `submit_change` tool also requires a separate `change_sha256`
-input: lowercase SHA-256 of the **exact UTF-8 raw `change_json` string** that
-the agent preflight checked. The agent must pass the digest unchanged, from the
-same bytes as the safe-output `change_json` input. Do not compute a checksum
-from normalized, decoded/re-serialized, or sanitized output.
+gh-aw's **pinned v1.2.2 compiler** documents the custom-job
+[\`artifacts:\` declaration](https://github.github.com/gh-aw/reference/custom-safe-outputs/#depending-on-agent-job-files).
+The authored \`sfstack-build.md\` declares exactly
+\`/tmp/gh-aw/agent/sfstack-software/proposal.json\`. The **agent** job
+automatically includes that file in its managed Actions artifact **after its
+mandatory secret-redaction pass and threat detection**; unsuccessful redaction
+fails closed and prevents upload. The read-only custom \`submit-change\` job
+downloads the declared artifact and stages the fixed source path (never an
+agent-selected path) next to the structured safe-output receipt. The
+\`sfstack-agent-change-<attempt>\` artifact therefore contains:
 
-The **trusted verifier** calculates SHA-256 of the received string and requires
-equality **before parsing its inner JSON, running baseline/RED/GREEN, or applying
-any agent-proposed file**. The envelope must contain one `submit_change` item
-with `change_json` and `change_sha256`; a missing, invalid, or different
-digest blocks the attempt and is retained as a negative gate. An agent-provided
-checksum is a **consistency assertion, not an attestation**, and still needs
-fresh host validation and independent review.
+- \`submission.json\`: sanitized safe-output metadata, with one \`submit_change\`
+  item and the \`change_sha256\` checksum but **no inline source**.
+- \`proposal.json\`: the compiler-redacted exact UTF-8 source proposal.
 
-This is necessary because gh-aw **v1.2.2** safe-output text sanitization is
-intentionally lossy. In the fourth live issue #15 attempt,
-[run 44705187658](https://github.com/grove/sfstack/actions/runs/44705187658),
-three escaped newline substrings in the original checked proposal became
-`(n/redacted)` during the output handoff. The received candidate had different
-bytes and failed GREEN with malformed JSON. The marker matches the
-[`sanitizeUrlProtocols` forbidden-URL replacement](https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/sanitize_content_core.cjs)
-that emits `(domain/redacted)`; the full pipeline stage where those bytes
-were changed has **not** been reproduced in isolation. Source data passed via a
-general-purpose, sanitizing text field cannot be promised byte-exact.
+The fresh **trusted verifier** re-reads both bounded regular files. Before
+parsing the proposal, creating a candidate tree, or running any candidate test,
+it checks SHA-256 of the **received** \`proposal.json\` against the agent's
+preflight receipt. A missing file, duplicate key, extra output, wrong identity,
+mismatched checksum, or modified file fails closed. The successful verifier
+retains *both* files and their hashes in its \`gate.json\`; the credentialed
+publisher recomputes those hashes and revalidates the source against the
+pinned issue, paths, RED/GREEN evidence, and complete suite before publishing
+a **draft**.
 
-**Do not attempt to reverse redaction**, decode/encode around safety filters,
-or disable the safe-output sanitizer, secret masking, firewall, or threat
-detection. There is no approved byte-exact transport for source modifications
-that the sanitizer changes. Such submissions must **stop before candidate
-execution**. Future lossless transport needs a documented upstream-supported
-design and independent security review. Issue #20's safe failure mode is an
-explicit block, not a claim that every proposed source file can pass through
-losslessly.
+The prior text safe-output channel was intentionally lossy. The fourth
+[issue #15 run 44705187658](https://github.com/grove/sfstack/actions/runs/44705187658)
+had three escaped newline sequences turned into \`(n/redacted)\`. The
+pinned gh-aw [URL-protocol sanitizer](https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/sanitize_content_core.cjs)
+emits this style of marker, although the precise invocation in the historical
+run has not been separately reproduced. The new file-artifact transport
+preserves ordinary source bytes without feeding them through that text
+sanitizer; **its separate mandatory secret-redaction pass remains enabled**.
+If secret redaction changes source bytes, the digest mismatches and the
+attempt is blocked. This is **not** a way to publish secrets or reverse masking.
+Malformed or hostile code remains untrusted until independently verified.
+The Quality Factory and human review remain required; preflight does not
+grant any merge authority.
+
+The offline tests exercise literal backslash-newlines, URL-like source text,
+secret-redaction mutations, missing/symlinked/hard-linked files, SHA binding,
+and publisher revalidation. An actual, bounded live pilot on the new controller
+is still required to demonstrate that the pinned gh-aw runtime transports the
+file exactly as documented; synthetic tests alone do not establish live
+operability.
 
 Preparation pins original source and task inputs; it does not execute checks
 during admission. In `defect` mode the **fresh host**, not the builder,
@@ -381,8 +390,8 @@ or merges anything. Never paste a token value into an issue, input, log, or PR.
 | Verification passes but no draft PR appears, and the publication step reports a permission error creating a pull request. | **Allow GitHub Actions to create and approve pull requests** is disabled for the repository, or an organization policy prevents it. | A repository administrator can enable the setting in **Settings → Actions → General → Workflow permissions**, subject to organization policy; it applies to workflows in this repository. The workflow creates only drafts and never approves or merges. Inspect existing drafts, then re-run the same attempt if the inputs are unchanged or dispatch a new run. See [Enable the integration](#enable-the-integration). |
 | A draft exists but there is no `sfstack quality` result. | The explicit quality dispatch failed. | Run **sfstack GitHub quality** for that PR using the [quality retry instructions](run-github.md#run-or-retry-manually). |
 | The agent job is green but the verification job says `Passing build lacks complete criteria, behavioral checks, or a complete bounded change.` | The structured `submit_change` can claim `status=passed` while listing unfinished `remaining_work` (or omitting actual checks/edits). Advisory risks and mandatory downstream review should instead be disclosed in `limitations`. | Inspect `sfstack-agent-change-<attempt>` and `sfstack-software-result-<attempt>`. Do not suppress nonempty `remaining_work` or publish; if the controller was updated, dispatch a new run from current `main`. |
-| The Copilot job succeeds, but verification says `Duplicate JSON key.` | The submitted raw `change_json` repeats a property (for example, a second `limitations` appended to the already-present template field). Ordinary JSON decoding may hide the duplicate by keeping only the last value. | Inspect the original `sfstack-agent-change-<attempt>` artifact without normalizing it. Keep the negative gate intact; update the builder to construct one response object, run `preflight_change.py` on the exact raw bytes, and re-dispatch from the new `main` after reviewed controller changes. Never waive duplicate-key validation or replay rejected artifacts. |
-| Verification stops with `Safe-output transport changed the agent's preflight-checked change_json bytes` (or a missing `change_sha256`). | gh-aw changed the serialized code during mandatory sanitization, or the digest does not match the string actually submitted. A valid response object alone does not prove byte fidelity. | Keep the negative gate and original agent artifact. Inspect content digests and approved allowed paths, not credential values. Do not rerun only the verifier or reconstruct redacted source, bypass safety controls, or keep spending on the same transport path. Wait for an upstream-supported safe lossless channel or use a separate human-authorized development workflow. |
+| The host rejects `Duplicate JSON key.` | The agent produced ambiguous raw `proposal.json` with a repeated field such as `limitations`. Ordinary JSON decoding can hide this error by keeping only the final value. | Inspect the declared proposal artifact without normalizing it. Correct the source object and rerun preflight on the raw file; do not relax strict parsing or replay rejected evidence. |
+| Verification stops with `Agent proposal artifact changed after preflight`, or the declared file is missing. | The compiler-redacted artifact bytes differ from the preflight checksum, possibly because secret masking was necessary; the job cannot safely read the fixed artifact, or the receipt is invalid. | Preserve negative evidence. Inspect only hashes and approved paths, never credentials; do not reconstruct masked bytes, disable redaction, or replay rejected artifacts. Fix legitimate proposal content or use a human-authorized development workflow. |
 | Verification fails. | The proposed files violate the checks or criteria. | Inspect the retained logs. No draft is published; fix the issue or inputs and dispatch a new run. |
 
 ## Complete the first live acceptance test
