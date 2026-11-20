@@ -273,8 +273,10 @@ def render(bundle, candidate, output, at=None):
                 "`status=passed`, `remaining_work=[]`, `limitations=[...]`, subject "
                 "to fresh host checks and human approval. If a *required* criterion "
                 "cannot be met, it belongs in `remaining_work` with a nonpassing status.\n"
-                "- The response is schema-validated exactly once. Return the complete bounded "
-                "JSON through submit_change; do not push, publish, or merge.\n")
+                "- The response is schema-validated by the agent then independently by the "
+                "trusted host. Return one bounded proposal via the declared secret-redacted "
+                "agent artifact; send only its SHA-256 receipt through submit_change. "
+                "Do not push, publish, or merge.\n")
     # This is *agent-side guidance* on a read-only controller checkout, not
     # evidence for the publisher. The host independently strict-parses the
     # submitted bytes again and retains every negative verdict.
@@ -289,27 +291,28 @@ def render(bundle, candidate, output, at=None):
         "fragments or insert raw property strings. Do not use ordinary "
         "json.loads/json.dumps to sanitize a duplicate-key payload: that "
         "silently drops one value. Fix the source object instead.\n"
-        "Before calling submit_change, write the exact final raw change_json "
-        "UTF-8 bytes (NOT an envelope) to "
-        "/tmp/gh-aw/sfstack-software/proposal.json, outside candidate/ "
-        "and controller/. Run this command on those exact bytes:\n\n"
+        "Before calling submit_change, write the exact final raw proposal JSON "
+        "UTF-8 bytes (NOT an envelope) to the DECLARED artifact path "
+        "/tmp/gh-aw/agent/sfstack-software/proposal.json, outside candidate/ "
+        "and controller/. Create its directory first. Run this command:\n\n"
         "```sh\n"
         "python controller/integrations/github/preflight_change.py "
-        "--proposal /tmp/gh-aw/sfstack-software/proposal.json "
+        "--proposal /tmp/gh-aw/agent/sfstack-software/proposal.json "
         "--schema /tmp/gh-aw/sfstack-software/context/change.schema.json "
         "--template /tmp/gh-aw/sfstack-software/context/change-template.json\n"
         "```\n"
         "If it fails, revise the response object, regenerate the file and "
-        "rerun preflight; never submit a malformed or ambiguous payload. "
-        "Submit exactly the validated file contents as the change_json string "
-        "once, without retyping, appending a field, or modifying the bytes "
-        "after the check. Include the separate change_sha256 safe-output input "
-        "with the lowercase SHA-256 hex digest printed by preflight for these "
-        "EXACT raw bytes. If the final JSON changes, rerun preflight and use "
-        "the new digest. The host must reject transport changes made later "
-        "by the safe-output sanitizer; never attempt to undo or bypass redaction. "
-        "Preflight is only a builder convenience: host strict parsing, "
-        "independent test evidence, Quality Factory, and human approval "
+        "rerun preflight; never submit malformed or ambiguous payloads. "
+        "The compiler declares and uploads exactly this source file as an agent "
+        "artifact AFTER mandatory secret redaction. Do not submit the source "
+        "JSON as a safe-output string; URL/text sanitization can corrupt code. "
+        "Call safeoutputs submit_change EXACTLY ONCE with only "
+        "--change_sha256 followed by the lowercase digest printed by preflight. "
+        "Do not mutate or reserialize the file after calculating that digest. "
+        "If the final JSON changes, rerun preflight and use the new digest. "
+        "The trusted host rejects transport changes, including secret masking, "
+        "BEFORE candidate execution. Never undo, evade, or disable redaction. "
+        "Independent host parsing, tests, Quality Factory, and human approval "
         "remain mandatory.\n"
     )
     invocation = render_skill("sf-build-change", context) + guidance
@@ -362,21 +365,23 @@ def load_response(path, run, target):
 
     change = items[0]
     if (not isinstance(change, dict) or change.get("type") != "submit_change"
-            or not {"type", "change_json", "change_sha256"}.issubset(change)
-            or not set(change).issubset({"type", "change_json", "change_sha256", "output_id"})
-            or not isinstance(change["change_json"], str) or not valid_output_id(change)):
-        raise ValueError("Expected exactly one submit_change with raw change_json and change_sha256.")
-    # This claims *byte consistency*, not agent trust. The string digest is
-    # computed by the unprivileged builder before the gh-aw safe-output
-    # sanitization layer; a lossy sanitizer must result in a negative gate,
-    # never an altered candidate being executed or silently reconstructed.
+            or not {"type", "change_sha256"}.issubset(change)
+            or not set(change).issubset({"type", "change_sha256", "output_id"})
+            or not valid_output_id(change)):
+        raise ValueError("Expected one submit_change receipt without inline code or extra authority.")
+    # The upstream compiler preserves only explicitly declared agent files,
+    # runs its secret-redaction pass, and downloads them alongside agent output.
+    # Read the FIXED file from the current attempt's sealed agent artifact;
+    # never interpret agent-controlled filenames or use unredacted workspace
+    # bytes. A matching digest proves consistency, not the agent's honesty.
     receipt = change["change_sha256"]
     if (not isinstance(receipt, str)
             or re.fullmatch(r"[0-9a-f]{64}", receipt) is None):
-        raise ValueError("Expected lowercase SHA-256 for the unmodified submitted change_json.")
-    if sha256(change["change_json"].encode("utf-8")) != receipt:
-        raise ValueError("Safe-output transport changed the agent's preflight-checked change_json bytes; "
-                         "refusing candidate execution. Preserve the negative evidence.")
+        raise ValueError("Expected lowercase SHA-256 for the preflight-checked proposal artifact.")
+    proposal_raw = read_regular(Path(path).parent / "proposal.json", maximum=MAX_SUBMISSION)
+    if sha256(proposal_raw) != receipt:
+        raise ValueError("Agent proposal artifact changed after preflight (possibly mandatory secret "
+                         "redaction); refusing candidate execution. Preserve the negative evidence.")
     output_ids = set()
     for item in items:
         if not isinstance(item, dict) or not valid_output_id(item):
@@ -392,7 +397,7 @@ def load_response(path, run, target):
                 or not isinstance(item["message"], str)
                 or len(item["message"]) > 2000):
             raise ValueError("Only bounded advisory noops may accompany submit_change.")
-    response = automation.strict_json(change["change_json"])
+    response = automation.strict_json(proposal_raw)
     errors = list(Draft202012Validator(load_json(HERE / "change.schema.json")).iter_errors(response))
     if errors:
         raise ValueError("Agent change response does not match the closed schema: " + errors[0].message[:500])
@@ -419,7 +424,7 @@ def load_response(path, run, target):
         if sha256(raw_content) == target["allowed_files"][edit["path"]]["sha256"]:
             raise ValueError("Agent submitted an unchanged file.")
     defect.validate_response(response, target)
-    return response, raw
+    return response, raw, proposal_raw
 
 
 def candidate_record(repo, target, edits):
@@ -455,8 +460,9 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
         raise ValueError("Result directory must be new and outside the candidate.")
     output.mkdir(parents=True)
     (output / "logs").mkdir()
-    response, raw = load_response(submission_path, run, target)
+    response, raw, proposal_raw = load_response(submission_path, run, target)
     (output / "submission.json").write_bytes(raw)
+    (output / "proposal.json").write_bytes(proposal_raw)
     if agent_result != "success" or response["status"] != "passed":
         status = response["status"] if agent_result == "success" else "blocked"
         gate = {"status": status, "passed": False, "reasons": ["Builder did not establish a complete change."],
@@ -512,6 +518,7 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
     verification = quality.artifact(verify_run, "verification-report", "sf-verify-change", status, payload, evidence, checks, observed)
     write_json(output / "verification-report.json", verification)
     proof = [quality.evidence(output / "submission.json", "agent-submission", "analysis"),
+             quality.evidence(output / "proposal.json", "agent-proposal", "analysis"),
              quality.evidence(output / "diff.patch", "candidate-diff", "diff"),
              quality.evidence(output / "candidate.json", "candidate-identity", "input"),
              quality.evidence(output / "verification-report.json", "verification-report", "observation"), *evidence]
@@ -547,7 +554,8 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
             write_json(checkpoint / "run.json", completed)
             if plan(checkpoint / "workflow.json", checkpoint / "run.json", observed)["status"] != "complete":
                 raise ValueError("Completed build does not satisfy its skill handoff.")
-    retained = ["candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json"]
+    retained = ["candidate.json", "diff.patch", "submission.json", "proposal.json",
+                "change-set.json", "verification-report.json"]
     if defect_record:
         retained += ["defect-evidence.json", "diagnosis.json", "red.patch"]
     gate = {"status": status, "passed": status == "passed", "candidate_sha": candidate["head_sha"],
@@ -620,11 +628,12 @@ class SoftwareHost(automation.Host):
                 or gate.get("mutation_authorized") is not False or gate.get("input_digest") != run["subject"]["input_digest"]
                 or gate.get("candidate_sha") != candidate.get("head_sha")
                 or set(gate.get("digests", {})) != (
-                     {"candidate.json", "diff.patch", "submission.json", "change-set.json", "verification-report.json"}
+                     {"candidate.json", "diff.patch", "submission.json", "proposal.json",
+                      "change-set.json", "verification-report.json"}
                      | ({"defect-evidence.json", "diagnosis.json", "red.patch"} if target["mode"] == "defect" else set()))
                 or any(digest(result / path) != value for path, value in gate["digests"].items())):
             raise ValueError("Build gate is negative, incomplete, or its evidence was modified.")
-        response, _ = load_response(result / "submission.json", run, target)
+        response, _, _ = load_response(result / "submission.json", run, target)
         expected, diff = candidate_record(repo, target, response["edits"])
         if response["status"] != "passed" or candidate != expected or read_regular(result / "diff.patch") != diff:
             raise ValueError("Verified Git objects differ from the bounded submitted content.")
