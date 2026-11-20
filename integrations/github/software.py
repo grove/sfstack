@@ -303,7 +303,11 @@ def render(bundle, candidate, output, at=None):
         "rerun preflight; never submit a malformed or ambiguous payload. "
         "Submit exactly the validated file contents as the change_json string "
         "once, without retyping, appending a field, or modifying the bytes "
-        "after the check. If the final JSON changes, rerun preflight. "
+        "after the check. Include the separate change_sha256 safe-output input "
+        "with the lowercase SHA-256 hex digest printed by preflight for these "
+        "EXACT raw bytes. If the final JSON changes, rerun preflight and use "
+        "the new digest. The host must reject transport changes made later "
+        "by the safe-output sanitizer; never attempt to undo or bypass redaction. "
         "Preflight is only a builder convenience: host strict parsing, "
         "independent test evidence, Quality Factory, and human approval "
         "remain mandatory.\n"
@@ -358,10 +362,21 @@ def load_response(path, run, target):
 
     change = items[0]
     if (not isinstance(change, dict) or change.get("type") != "submit_change"
-            or not {"type", "change_json"}.issubset(change)
-            or not set(change).issubset({"type", "change_json", "output_id"})
+            or not {"type", "change_json", "change_sha256"}.issubset(change)
+            or not set(change).issubset({"type", "change_json", "change_sha256", "output_id"})
             or not isinstance(change["change_json"], str) or not valid_output_id(change)):
-        raise ValueError("Expected exactly one submit_change safe output.")
+        raise ValueError("Expected exactly one submit_change with raw change_json and change_sha256.")
+    # This claims *byte consistency*, not agent trust. The string digest is
+    # computed by the unprivileged builder before the gh-aw safe-output
+    # sanitization layer; a lossy sanitizer must result in a negative gate,
+    # never an altered candidate being executed or silently reconstructed.
+    receipt = change["change_sha256"]
+    if (not isinstance(receipt, str)
+            or re.fullmatch(r"[0-9a-f]{64}", receipt) is None):
+        raise ValueError("Expected lowercase SHA-256 for the unmodified submitted change_json.")
+    if sha256(change["change_json"].encode("utf-8")) != receipt:
+        raise ValueError("Safe-output transport changed the agent's preflight-checked change_json bytes; "
+                         "refusing candidate execution. Preserve the negative evidence.")
     output_ids = set()
     for item in items:
         if not isinstance(item, dict) or not valid_output_id(item):

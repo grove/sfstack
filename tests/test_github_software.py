@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from urllib.parse import parse_qs, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,7 +103,10 @@ class SoftwareFixture(unittest.TestCase):
         return response
 
     def submit(self, response):
-        self.write(self.submission, {"items": [{"type": "submit_change", "change_json": json.dumps(response)}]})
+        raw = json.dumps(response)
+        self.write(self.submission, {"items": [{
+            "type": "submit_change", "change_json": raw,
+            "change_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest()}]})
 
     def verify(self, agent_result="success"):
         if self.result.exists():
@@ -320,6 +324,69 @@ class GitHubSoftwareTests(SoftwareFixture):
                 with self.assertRaisesRegex(ValueError, "closed schema"):
                     self.verify()
                 self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
+
+    def test_transport_checksum_rejects_fourth_pilot_redaction_before_execution(self):
+        """The upstream sanitizer's three n/redacted markers cannot run as code."""
+        self.prepare()
+        response = self.response()
+        outer = load_json(self.submission)
+        submitted = outer["items"][0]
+        original = submitted["change_json"]
+        original_sha = submitted["change_sha256"]
+
+        # Mimic v1.2.2's loss of escaped newline source, without real secrets.
+        code = response["edits"][0]["content"]
+        response["edits"][0]["content"] = (
+            code + 'write_text("one\\\\n")\\n'
+                   + 'write_text("two\\\\n")\\n'
+                   + 'write_text("three\\\\n")\\n')
+        clean = json.dumps(response)
+        altered = clean.replace("\\\\n", "(n/redacted)", 3)
+        self.assertNotEqual(clean, altered)
+        self.assertEqual(3, altered.count("(n/redacted)"))
+        submitted["change_json"] = altered
+        submitted["change_sha256"] = hashlib.sha256(clean.encode("utf-8")).hexdigest()
+        self.write(self.submission, outer)
+
+        # The fixture's synthetic run_id must not impersonate this real CI
+        # workflow's GITHUB_RUN_ID. Only disable that external provenance
+        # comparison inside this unit test, not in the production controller.
+        with patch.object(software.quality, "check_actions_run"):
+            status = software.main([
+                "verify", "--repo", str(self.repo), "--bundle", str(self.bundle),
+                "--submission", str(self.submission), "--agent-result", "success",
+                "--out", str(self.result),
+            ])
+        self.assertEqual(1, status)
+        gate = load_json(self.result / "gate.json")
+        self.assertFalse(gate["passed"])
+        self.assertEqual("blocked", gate["status"])
+        self.assertIn("Safe-output transport changed", gate["reasons"][0])
+        self.assertFalse((self.result / "candidate.json").exists())
+        self.assertFalse((self.result / "logs" / "answer-behavior.txt").exists())
+        self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
+        self.assertEqual("answer = 41\n", (self.repo / "examples/answer.py").read_text())
+
+    def test_checksum_is_required_and_verified_independently_of_builder_claim(self):
+        self.prepare()
+        self.response()
+        envelope = load_json(self.submission)
+        original = envelope["items"][0]["change_sha256"]
+        for digest in (None, "", "X" * 64, "0" * 64, 123):
+            with self.subTest(checksum=digest):
+                corrupted = deepcopy(envelope)
+                if digest is None:
+                    del corrupted["items"][0]["change_sha256"]
+                else:
+                    corrupted["items"][0]["change_sha256"] = digest
+                self.write(self.submission, corrupted)
+                with self.assertRaisesRegex(ValueError, "SHA-256|Safe-output transport|change_sha256"):
+                    software.load_response(self.submission, load_json(self.bundle / "run.json"),
+                                           load_json(self.bundle / "target.json"))
+                self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
+        self.assertRegex(original, r"^[0-9a-f]{64}$")
+        self.write(self.submission, envelope)
+        self.assertTrue(self.verify()["passed"])
 
     def test_unknown_response_authority_field_is_rejected(self):
         self.prepare()

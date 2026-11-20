@@ -38,7 +38,8 @@ class SubmissionPreflightTests(SoftwareFixture):
 
         # Exact host transport remains fail-closed, with no candidate applied.
         self.write(self.submission, {"items": [
-            {"type": "submit_change", "change_json": duplicate}]})
+            {"type": "submit_change", "change_json": duplicate,
+             "change_sha256": hashlib.sha256(duplicate.encode("utf-8")).hexdigest()}]})
         with self.assertRaisesRegex(ValueError, "Duplicate JSON key"):
             self.verify()
         self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
