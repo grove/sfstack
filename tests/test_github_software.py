@@ -708,6 +708,22 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
         }}, dispatch)
         self.assertFalse(any("merge" in path for _, path, _ in self.api.mutations))
 
+    def test_publish_accepts_cli_string_directories_after_host_verification(self):
+        """Run #44746100752 passed RED/GREEN, then crashed on str / str."""
+        candidate = self.prepared_host()
+        # argparse passes --bundle and --result as strings; the original
+        # Path-based fixture silently missed that real publication boundary.
+        published = self.host.publish(str(self.bundle), str(self.result),
+                                      self.repo, at=self.at)
+        self.assertTrue(published["published"])
+        self.assertTrue(published["draft"])
+        self.assertTrue(published["quality_requested"])
+        self.assertFalse(published["merge_authorized"])
+        self.assertEqual(candidate["head_sha"], published["candidate_sha"])
+        self.assertEqual(1, sum(path.endswith("/pulls") for _, path, _ in self.api.mutations))
+        self.assertEqual(1, sum(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
+        self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
+
     def test_builder_limitations_survive_into_the_draft_pr_without_approval(self):
         candidate = self.prepared_host(limitations=[
             "Future hardening outside this issue may be needed.",
