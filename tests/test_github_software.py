@@ -1075,7 +1075,7 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
                 else:
                     self.api.quality_runs[quality_id + 1] = {
                         **deepcopy(original), "id": quality_id + 1}
-                with self.assertRaisesRegex(ValueError, "quality|Quality|dispatch|reserved"):
+                with self.assertRaisesRegex(ValueError, "quality|Quality|dispatch|reserved|Workflow provenance"):
                     self.publish()
                 self.assertEqual(before, len(self.remote_reference_mutations()))
         self.api.quality_runs = {quality_id: original}
