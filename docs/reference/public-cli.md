@@ -1,14 +1,14 @@
-# Public contract and gate CLI (v1.0)
+# Public contract and gate CLI (v1.1)
 
-This is the **portable, read-only sfstack interface** for a future independent
+This is the **portable sfstack interface** consumed by an independent
 factory host. It is not a controller, GitHub adapter, runner, credential broker,
 or a new authorization model. The only supported machine entrypoint is
 **sfstack-contract** from the **sfstack-contracts** distribution. Python modules
-under tools/ and integrations/ are implementation details, not import APIs.
+under tools/ are implementation details, not import APIs.
 
 ## Install a pinned distribution
 
-The repository builds version **1.0.0** of the distributable wheel. This
+The repository builds version **1.1.0** of the distributable wheel. This
 documentation does **not** assert that a PyPI package or GitHub Release has
 been published. A host must acquire the versioned wheel from an independently
 controlled release/artifact channel and verify its independently pinned SHA-256
@@ -16,10 +16,10 @@ before installation. For a local, reproducible build from a trusted sfstack
 release checkout:
 
     python -m pip wheel --wheel-dir wheelhouse .
-    sha256sum wheelhouse/sfstack_contracts-1.0.0-py3-none-any.whl
+    sha256sum wheelhouse/sfstack_contracts-1.1.0-py3-none-any.whl
     python -m venv consumer-venv
     consumer-venv/bin/python -m pip install --no-index --find-links wheelhouse \
-      'sfstack-contracts==1.0.0'
+      'sfstack-contracts==1.1.0'
     consumer-venv/bin/sfstack-contract version
 
 For production, **pin and verify the exact wheel digest** when promoting the
@@ -29,7 +29,8 @@ mutable main branch or import Python files from an sfstack checkout. The
 wheel includes the canonical schemas, skills, protocol references, and recipes
 as a build-time snapshot. It does not read the build checkout at runtime.
 The supplied **tests/external_consumer/run.sh** makes a version-pinned wheel,
-installs it and its dependencies into a fresh virtual environment, copies only
+creates a SHA-256 lock for the resulting wheel and each dependency, installs
+them with `pip --require-hashes` into a fresh virtual environment, copies only
 untrusted fixture data to an unrelated directory, and exercises the executable
 without any source imports, sys.path edits, or assumed working directory.
 
@@ -43,10 +44,41 @@ the caller's working directory, **not** to the sfstack source tree.
 | version | none | Interface and distribution versions. |
 | resolve | --skill ID | Canonical versioned contract, skill instructions and execution protocol. |
 | schema | --name NAME | Existing canonical JSON Schema by name, e.g. artifact, policy, gate-request, run. |
+| validate | --name NAME --path FILE | Validate a JSON document using a canonical schema; return valid and reasons. |
+| render | --skill ID --context FILE | Render the canonical skill, contract, protocol and artifact schema with explicitly delimited task data. |
 | recipe | --name NAME | Existing canonical workflow recipe by name, e.g. quality, feature. |
 | artifact | --path FILE --request FILE --policy FILE [--type TYPE] [--at UTC] | Inspect one artifact, its subject/run, freshness, checks and retained evidence bytes. |
+| inspect | --path FILE --context FILE [--type TYPE] [--allow-nonpassing] [--at UTC] | Inspect one artifact without an authorization request; return the full record and reasons. |
+| consolidate | (--workflow FILE or --recipe NAME) --run FILE --out-dir RELATIVE [--out-run FILENAME] [--at UTC] | Retain an assessment and its evidence, optionally writing a new checkpoint. |
 | plan | (--workflow FILE or --recipe NAME) --run FILE [--at UTC] | Bind an existing recipe to a fixed checkpoint and evaluate eligible steps. |
 | gate | --request FILE --policy FILE [--at UTC] | Evaluate exact-scoped grants and proof requirements for one effect. |
+
+`inspect --context` accepts exactly `subject`, `run_id`, and
+`max_evidence_age_seconds`. Their definitions come from the existing canonical
+gate-request and policy schemas; this observation context contains no grants.
+The result has `artifact` (the record or null) and `reasons`. An explicit
+`--allow-nonpassing` permits structurally valid negative reports to be retained
+and consolidated, while still validating subject, freshness, checks, and every
+evidence digest. A passed **inspection** of a failed report does not change the
+report status or authorize an effect.
+
+`validate` returns `{ "valid": true, "reasons": [] }` for a valid document.
+Malformed JSON, duplicate keys, schema violations, and missing document files
+produce a blocked result with `valid: false`. Unknown schema names or invalid
+flags are invalid invocations. `render` returns `skill` and
+`invocation_markdown`; supplied context is task data, including any embedded
+instructions.
+
+`consolidate` is the only command that writes files. It delegates to the
+canonical quality summarizer, preserves negative findings, copies their
+retained evidence, and writes only new output paths beneath the run directory.
+It refuses traversal and overwriting existing outputs. Its result contains
+`assessment`, `status`, `findings`, `selected_reports`, and `checkpoint`. A
+completed negative or inconclusive assessment returns exit 2 and an envelope
+status of blocked, while preserving its actual assessment status in the result
+and output artifact. Malformed controls, unavailable evidence that prevents
+consolidation, or invalid output destinations return exit 64. It never grants
+remediation, authenticates reviewers, invokes candidate code, or mutates GitHub.
 
 The artifact command takes the same existing gate-request schema for the
 immutable **subject** and **run_id**, and the existing policy for its maximum
@@ -71,8 +103,8 @@ Every non-help invocation emits **exactly one JSON object on stdout**; neither
 warnings nor error prose are intermixed. The stable top-level keys are:
 
     {
-      "interface_version": "1.0",
-      "distribution_version": "1.0.0",
+      "interface_version": "1.1",
+      "distribution_version": "1.1.0",
       "operation": "gate",
       "status": "blocked",
       "result": {
@@ -94,6 +126,8 @@ result. Callers MUST check **both** exit code and status, and for a gate also
 require result.decision == allowed. Never infer effect authorization from a
 planner's successful execution: plan result.status distinguishes ready, blocked
 and complete, and complete does not mean the candidate's quality passed.
+The same distinction applies to evidence inspection: callers must separately
+check the inspected artifact's status when they require a positive result.
 
 A denied gate is an **expected negative result**, not an invalid call. Error
 message text is diagnostic and may evolve; do not parse prose. Host-policy
@@ -120,37 +154,23 @@ candidate agent.
   remain responsible for cryptographic digests, independent host
   observations, and exact immutable subject identity.
 
-## Current GitHub self-host boundary and conversion plan
+## Independent GitHub host
 
-The existing **integrations/github/quality.py finalize** path now shells out
-to the public gate command, checks both the JSON response and process exit,
-records the versioned envelope in authorization-interface.json, and preserves
-the earlier authorization-gate.json result for existing consumers. The
-adapter still resolves the CLI through its trusted controller checkout; it is
-**not** yet an independently versioned GitHub host. Agent and verification
-jobs receive no new GitHub permissions.
+The GitHub implementation is maintained in [grove/factory](https://github.com/grove/factory).
+It invokes an installed, version- and SHA-256-pinned `sfstack-contract` wheel
+through this CLI. It does not import private `tools/*` modules, assume an
+sfstack checkout layout, or keep a second copy of portable policy logic.
+The v1.1 additions above correspond to the host's actual validation, evidence
+inspection, skill rendering, and quality consolidation calls.
 
-Remaining internal dependencies are explicit:
+Controller-owned PR admission, GitHub events and credentials, candidate
+isolation, independent verification, draft publishing, and durable check-run
+ownership remain host responsibilities. Installing a pinned CLI gives the host
+no new permissions and does not establish human review or a merge gate.
 
-- **integrations/github/quality.py:** common artifact/path/schema helpers,
-  factory plan, quality_report consolidation, render_invocation, plus local
-  workflow and policy file reads.
-- **integrations/github/software.py:** common helpers, factory plan,
-  quality_report status, render_invocation, quality/defect helpers, and local
-  workflow/schemas. **integrations/github/defect.py** also imports common.
-- **integrations/github/automation.py:** owns authenticated GitHub
-  publication/check-run operations; it should remain on the host side, not
-  move into the portable CLI.
-
-Follow-up conversion should replace planner, artifact validation, skill
-rendering and consolidation calls with carefully selected CLI operations
-where they cross the host boundary, then install a digest-pinned release in
-trusted controller jobs and remove source-tree imports/layout assumptions.
-Controller-owned PR admissions, GitHub events/API credentials, isolated
-candidate execution, independent checks, draft publishing and check-run
-ownership remain host responsibilities. Do not relax existing at-most-once
-recovery or treat Copilot's success label as verification evidence.
-
-Extraction to a separate factory repository is explicitly **out of scope**
-until the acceptance suites for issues #29 and #30, including any required
-live recovery exercise and human review, are separately satisfied.
+The extraction carries the outstanding live dispatch/recovery acceptance and
+target-repository branch-rule checks into the destination. The earlier
+requirement to finish every live acceptance exercise in the temporary sfstack
+pilot before moving the host is superseded by the explicitly authorized
+migration. Existing failure records and unexecuted acceptance checks must
+remain distinguishable from completed deterministic verification.

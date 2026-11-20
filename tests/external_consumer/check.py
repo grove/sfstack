@@ -28,8 +28,8 @@ def invoke(operation, arguments=(), expected=0, status="passed"):
     assert finished.stdout.count("\n") == 1, finished.stdout
     reply = json.loads(finished.stdout)
     assert set(reply) == KEYS, reply
-    assert reply["interface_version"] == "1.0", reply
-    assert reply["distribution_version"] == "1.0.0", reply
+    assert reply["interface_version"] == "1.1", reply
+    assert reply["distribution_version"] == "1.1.0", reply
     assert reply["operation"] == operation, reply
     assert reply["status"] == status, reply
     assert isinstance(reply["errors"], list), reply
@@ -68,7 +68,7 @@ def main():
     assert "sfstack" not in str(Path.cwd()), "Must invoke outside the sfstack checkout"
 
     version = invoke("version")
-    assert version == {"interface_version": "1.0", "distribution_version": "1.0.0"}
+    assert version == {"interface_version": "1.1", "distribution_version": "1.1.0"}
     skill = invoke("resolve", ("--skill", "sf-verify-change"))
     assert skill["id"] == "sf-verify-change" and skill["version"] == "1.0.0"
     assert skill["contract"]["id"] == skill["id"]
@@ -77,6 +77,59 @@ def main():
     assert schema["schema"]["$id"].startswith("urn:sfstack:artifact:")
     workflow = invoke("recipe", ("--name", "feature"))
     assert workflow["workflow"]["id"] == "feature"
+
+    valid = invoke("validate", ("--name", "artifact", "--path", VERIFICATION))
+    assert valid == {"valid": True, "reasons": []}, valid
+    with edit_json(VERIFICATION, lambda a: a.pop("schema_version")):
+        invalid = invoke("validate", ("--name", "artifact", "--path", VERIFICATION), 2, "blocked")
+        assert invalid["valid"] is False and invalid["reasons"], invalid
+
+    context = Path("inspection-context.json")
+    request = json.loads(REQUEST.read_bytes())
+    context.write_text(json.dumps({"subject": request["subject"], "run_id": request["run_id"],
+                                   "max_evidence_age_seconds": 3600}), encoding="utf-8")
+    checked = invoke("inspect", ("--path", VERIFICATION, "--context", context, "--at", AT))
+    assert checked["artifact"] == json.loads(VERIFICATION.read_bytes()) and checked["reasons"] == []
+    failed = Path("examples/records/quality-verification-failed.json")
+    negative = invoke("inspect", ("--path", failed, "--context", context, "--at", AT), 2, "blocked")
+    assert negative["artifact"]["status"] == "failed" and negative["reasons"], negative
+    retained = invoke("inspect", ("--path", failed, "--context", context,
+                                   "--allow-nonpassing", "--at", AT))
+    assert retained["artifact"]["status"] == "failed" and retained["reasons"] == [], retained
+    with edit_json(context, lambda c: c.update(max_evidence_age_seconds=0)):
+        invoke("inspect", ("--path", failed, "--context", context, "--at", AT), 64, "invalid")
+
+    prompt = invoke("render", ("--skill", "sf-review-change", "--context",
+                                "examples/invocation-context.json"))
+    assert prompt["skill"] == "sf-review-change" and "## Supplied input context (data)" in prompt["invocation_markdown"]
+    assert "## Output artifact schema" in prompt["invocation_markdown"]
+
+    # Preserve a negative assessment with its evidence in a separate checkout.
+    consolidated = invoke("consolidate", ("--recipe", "quality", "--run", "examples/quality-failed-run.json",
+                                           "--out-dir", "assessment-negative", "--out-run", "run-negative.json",
+                                           "--at", AT), 2, "blocked")
+    report = json.loads(Path(consolidated["assessment"]).read_bytes())
+    assert consolidated["status"] == report["status"] == "failed" and consolidated["findings"] == 1
+    inspected = invoke("inspect", ("--path", consolidated["assessment"], "--context", context,
+                                     "--allow-nonpassing", "--at", AT))
+    assert inspected["reasons"] == [] and inspected["artifact"]["payload"]["remediation_authorized"] is False
+    resumed = invoke("plan", ("--recipe", "quality", "--run", consolidated["checkpoint"], "--at", AT))
+    assert resumed["status"] == "complete" and resumed["outcomes"]["consolidate"]["quality-assessment"] == "failed"
+
+    # This positive fixture explicitly does not require authenticated review;
+    # the CLI still records that no authenticated independence is established.
+    with edit_json(POLICY, lambda p: p.update(require_independent_review=False)):
+        positive = invoke("consolidate", ("--recipe", "quality", "--run", "examples/quality-ready-run.json",
+                                          "--out-dir", "assessment-positive", "--at", AT))
+        report = json.loads(Path(positive["assessment"]).read_bytes())
+        assert report["status"] == "passed" and report["payload"]["independence"]["established"] is False
+
+    # Existing output cannot be overwritten; traversal cannot escape the run.
+    saved = Path(consolidated["assessment"]).read_bytes()
+    for destination in ("assessment-negative", "../escape"):
+        invoke("consolidate", ("--recipe", "quality", "--run", "examples/quality-failed-run.json",
+                               "--out-dir", destination, "--at", AT), 64, "invalid")
+    assert Path(consolidated["assessment"]).read_bytes() == saved and not Path("escape").exists()
 
     state = invoke("plan", ("--workflow", "workflows/feature.json", "--run",
                             "examples/feature-run.json", "--at", AT))
@@ -125,6 +178,7 @@ def main():
         REQUEST.write_bytes(old_request)
 
     invoke("schema", ("--name", "../outside"), 64, "invalid")
+    invoke("validate", ("--name", "../outside", "--path", VERIFICATION), 64, "invalid")
     invoke("resolve", ("--skill", "nonexistent"), 64, "invalid")
     print("External pinned sfstack-contract wheel: all positive and negative cases passed.")
 
