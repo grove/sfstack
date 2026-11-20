@@ -179,6 +179,17 @@ submits complete replacement contents through the custom `submit_change` output;
 its local workspace and self-reported test results are not authoritative inputs
 to the publisher. The host independently reapplies the proposal and verifies it.
 
+The `submit_change` JSON distinguishes `remaining_work` from optional
+`limitations`. **A passing build must have `remaining_work=[]`**. Any
+nonempty entry means an unresolved implementation obligation and blocks draft
+publication, even if the agent claims `passed`. Future hardening suggestions,
+ordinary CI sandbox caveats, and outstanding mandatory quality/human review are
+**nonblocking advisory disclosures** when the selected implementation is
+complete: put those in `limitations`, not `remaining_work`. The host retains
+them in the change-set and draft PR but does **not** treat them as verified
+claims. Actual unmet criteria always require a nonpassing result; never move
+blockers into `limitations` to clear a gate.
+
 Preparation pins original source and task inputs; it does not execute checks
 during admission. In `defect` mode the **fresh host**, not the builder,
 executes the existing baseline before the test-only RED candidate and the
@@ -279,7 +290,12 @@ obsolete drafts after comparing them. The integration does not overwrite a
 human-edited branch or automatically merge, close, or clean up another attempt.
 
 If verification fails, inspect the retained logs and criteria. There is no draft
-publication to force through. If draft creation fails, inspect the publication
+publication to force through. If an agent reports `status=passed` but fills
+`remaining_work` with review caveats or future suggestions, the host correctly
+rejects that inconsistent response **before** independent RED/GREEN testing.
+Keep that negative result; it cannot be reinterpreted as passing. Clarify the
+advisory/nonblocking distinction in the agent invocation, and dispatch a new
+run after any controller/base change; do not patch old evidence. If draft creation fails, inspect the publication
 step and repository PR-creation permission. If a draft exists but quality
 dispatch failed, run **sfstack GitHub quality** manually for that PR from the
 current default branch, using the [quality retry instructions](run-github.md#run-or-retry-manually).
@@ -297,6 +313,7 @@ or merges anything. Never paste a token value into an issue, input, log, or PR.
 | The run reports a stale or changed base, issue, or inputs, or publication refuses to continue. | `main` advanced or the issue was edited after the run pinned its snapshot. | Do not retry the old run. Review the current issue and dispatch a new run from the current default branch. Use **Re-run all jobs** only when the issue, base, and scope are unchanged, as described in [Retry or recover](#retry-or-recover). |
 | Verification passes but no draft PR appears, and the publication step reports a permission error creating a pull request. | **Allow GitHub Actions to create and approve pull requests** is disabled for the repository, or an organization policy prevents it. | A repository administrator can enable the setting in **Settings → Actions → General → Workflow permissions**, subject to organization policy; it applies to workflows in this repository. The workflow creates only drafts and never approves or merges. Inspect existing drafts, then re-run the same attempt if the inputs are unchanged or dispatch a new run. See [Enable the integration](#enable-the-integration). |
 | A draft exists but there is no `sfstack quality` result. | The explicit quality dispatch failed. | Run **sfstack GitHub quality** for that PR using the [quality retry instructions](run-github.md#run-or-retry-manually). |
+| The agent job is green but the verification job says `Passing build lacks complete criteria, behavioral checks, or a complete bounded change.` | The structured `submit_change` can claim `status=passed` while listing unfinished `remaining_work` (or omitting actual checks/edits). Advisory risks and mandatory downstream review should instead be disclosed in `limitations`. | Inspect `sfstack-agent-change-<attempt>` and `sfstack-software-result-<attempt>`. Do not suppress nonempty `remaining_work` or publish; if the controller was updated, dispatch a new run from current `main`. |
 | Verification fails. | The proposed files violate the checks or criteria. | Inspect the retained logs. No draft is published; fix the issue or inputs and dispatch a new run. |
 
 ## Complete the first live acceptance test
