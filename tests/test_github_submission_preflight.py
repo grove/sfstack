@@ -121,7 +121,7 @@ class SubmissionPreflightTests(SoftwareFixture):
         self.assertIn("preflight_change.py", guidance)
         self.assertIn("change-template.json", guidance)
         self.assertIn("change.schema.json", guidance)
-        self.assertIn("--proposal /tmp/gh-aw/sfstack-software/proposal.json", guidance)
+        self.assertIn("--proposal /tmp/gh-aw/agent/sfstack-software/proposal.json", guidance)
         self.assertIn("ALREADY has a `limitations` property", guidance)
         self.assertIn("Duplicate keys, including nested ones", guidance)
         self.assertIn("json.dumps", guidance)
