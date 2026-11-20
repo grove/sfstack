@@ -279,26 +279,26 @@ def render(bundle, candidate, output, at=None):
     # evidence for the publisher. The host independently strict-parses the
     # submitted bytes again and retains every negative verdict.
     guidance += (
-        "\\n# Mandatory pre-submission JSON uniqueness check\\n\\n"
+        "\n# Mandatory pre-submission JSON uniqueness check\n\n"
         "The response template ALREADY has a `limitations` property. "
         "Update that existing list once; do not append another `limitations` "
         "key after `diagnosis`, `edits`, or at the end of the JSON. "
-        "Duplicate keys, including nested ones, are always rejected.\\n"
+        "Duplicate keys, including nested ones, are always rejected.\n"
         "Build ONE Python dictionary from change-template.json, update its "
         "fields, then serialize once with json.dumps. Never concatenate JSON "
         "fragments or insert raw property strings. Do not use ordinary "
         "json.loads/json.dumps to sanitize a duplicate-key payload: that "
-        "silently drops one value. Fix the source object instead.\\n"
+        "silently drops one value. Fix the source object instead.\n"
         "Before calling submit_change, write the exact final raw change_json "
         "UTF-8 bytes (NOT an envelope) to "
         "/tmp/gh-aw/sfstack-software/proposal.json, outside candidate/ "
-        "and controller/. Run this command on those exact bytes:\\n\\n"
-        "```sh\\n"
+        "and controller/. Run this command on those exact bytes:\n\n"
+        "```sh\n"
         "python controller/integrations/github/preflight_change.py "
         "--proposal /tmp/gh-aw/sfstack-software/proposal.json "
         "--schema /tmp/gh-aw/sfstack-software/context/change.schema.json "
-        "--template /tmp/gh-aw/sfstack-software/context/change-template.json\\n"
-        "```\\n"
+        "--template /tmp/gh-aw/sfstack-software/context/change-template.json\n"
+        "```\n"
         "If it fails, revise the response object, regenerate the file and "
         "rerun preflight; never submit a malformed or ambiguous payload. "
         "Submit exactly the validated file contents as the change_json string "
@@ -306,7 +306,7 @@ def render(bundle, candidate, output, at=None):
         "after the check. If the final JSON changes, rerun preflight. "
         "Preflight is only a builder convenience: host strict parsing, "
         "independent test evidence, Quality Factory, and human approval "
-        "remain mandatory.\\n"
+        "remain mandatory.\n"
     )
     invocation = render_skill("sf-build-change", context) + guidance
     if target["mode"] == "defect":
