@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import timedelta
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -17,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 from common import load_json, now
-from integrations.github import software
+from integrations.github import software, automation
 
 
 class SoftwareFixture(unittest.TestCase):
@@ -554,6 +555,7 @@ class SoftwareGitHub:
         self.base, self.issue, self.candidate = base, deepcopy(issue), deepcopy(candidate)
         self.repository = {"full_name": "fixture/software", "default_branch": "main"}
         self.workflow = {"id": 50, "path": ".github/workflows/sfstack-software.yml"}
+        self.quality_workflow = {"id": 51, "path": ".github/workflows/sfstack-quality.yml"}
         self.run = {"id": 1234, "run_attempt": 1, "workflow_id": self.workflow["id"],
                     "path": self.workflow["path"], "event": "workflow_dispatch",
                     "head_sha": base, "head_branch": "main", "actor": {"login": "maintainer"},
@@ -563,7 +565,11 @@ class SoftwareGitHub:
         self.artifacts = [{"id": 812, "name": "sfstack-software-result-1", "expired": False,
                            "workflow_run": {"id": 1234, "head_sha": base}}]
         self.refs, self.pulls, self.calls = [], [], []
+        self.checks, self.quality_runs = {}, {}
         self.fail_dispatch = False
+        self.lose_dispatch_response = False
+        self.lose_check_response = False
+        self.lose_branch_response = False
         self.lose_pull_response = False
         self.wrong_blob = self.wrong_tree = self.wrong_commit = False
         self.issue_reads = 0
@@ -577,6 +583,7 @@ class SoftwareGitHub:
     def get(self, path):
         self.calls.append(("GET", path, None))
         parsed = urlsplit(path)
+        page = int(parse_qs(parsed.query).get("page", ["1"])[0])
         prefix = "repos/fixture/software"
         if not parsed.path.startswith(prefix):
             raise AssertionError("Unexpected repository: " + path)
@@ -587,8 +594,20 @@ class SoftwareGitHub:
             value = {"object": {"sha": self.base}}
         elif suffix == "/actions/workflows/sfstack-software.yml":
             value = self.workflow
+        elif suffix == "/actions/workflows/sfstack-quality.yml":
+            value = self.quality_workflow
         elif suffix == "/actions/runs/1234":
             value = self.run
+        elif re.fullmatch(r"/actions/runs/[0-9]+", suffix):
+            value = self.quality_runs[int(suffix.rsplit("/", 1)[-1])]
+        elif suffix == "/actions/workflows/sfstack-quality.yml/runs":
+            value = {"workflow_runs": list(self.quality_runs.values()) if page == 1 else []}
+        elif re.fullmatch(r"/commits/[a-f0-9]{40}/check-runs", suffix):
+            head = suffix.split("/")[2]
+            value = {"check_runs": [check for check in self.checks.values()
+                                     if check["head_sha"] == head] if page == 1 else []}
+        elif re.fullmatch(r"/check-runs/[0-9]+", suffix):
+            value = self.checks[int(suffix.rsplit("/", 1)[-1])]
         elif suffix == "/collaborators/maintainer/permission":
             value = {"permission": self.permission}
         elif suffix == "/issues/7":
@@ -635,6 +654,8 @@ class SoftwareGitHub:
                 raise AssertionError("A factory branch must not be recreated or overwritten.")
             reference = {"ref": body["ref"], "object": {"sha": body["sha"]}}
             self.refs.append(reference)
+            if self.lose_branch_response:
+                raise ValueError("Fixture lost the branch creation response after the write.")
             return deepcopy(reference)
         if suffix == "/pulls":
             if self.pulls:
@@ -643,17 +664,50 @@ class SoftwareGitHub:
                     "title": body["title"],
                     "head": {"sha": self.refs[0]["object"]["sha"], "ref": body["head"],
                              "repo": {"full_name": "fixture/software"}},
-                    "base": {"ref": body["base"], "repo": {"full_name": "fixture/software"}},
+                    "base": {"sha": self.base, "ref": body["base"],
+                             "repo": {"full_name": "fixture/software"}},
                     "body": body["body"]}
             self.pulls.append(pull)
             if self.lose_pull_response:
                 raise ValueError("Fixture lost the PR creation response after the write.")
             return deepcopy(pull)
+        if suffix == "/check-runs":
+            identifier = max(self.checks, default=500) + 1
+            check = {"id": identifier, "app": {"slug": "github-actions"},
+                     "conclusion": None, "completed_at": None, **deepcopy(body)}
+            self.checks[identifier] = check
+            if self.lose_check_response:
+                raise ValueError("Fixture lost the quality check reservation reply.")
+            return deepcopy(check)
         if suffix == "/actions/workflows/sfstack-quality.yml/dispatches":
             if self.fail_dispatch:
                 raise ValueError("Fixture quality dispatch is unavailable.")
+            identifier = max(self.quality_runs, default=2000) + 1
+            request = body["inputs"]
+            self.quality_runs[identifier] = {
+                "id": identifier, "run_attempt": 1, "workflow_id": self.quality_workflow["id"],
+                "path": self.quality_workflow["path"], "event": "workflow_dispatch",
+                "repository": deepcopy(self.repository), "head_repository": deepcopy(self.repository),
+                "head_branch": "main", "head_sha": self.base, "status": "queued", "conclusion": None,
+                "display_title": "sfstack quality / PR #" + request["pr-number"]
+                                 + " / request " + request["request-id"],
+            }
+            if self.lose_dispatch_response:
+                raise ValueError("Fixture lost the quality dispatch reply after the write.")
             return None
         raise AssertionError("Unexpected mutation: " + path)
+
+    def patch(self, path, body):
+        self.calls.append(("PATCH", path, deepcopy(body)))
+        prefix = "repos/fixture/software"
+        suffix = path[len(prefix):]
+        if re.fullmatch(r"/check-runs/[0-9]+", suffix):
+            check = self.checks[int(suffix.rsplit("/", 1)[-1])]
+            check.update(deepcopy(body))
+            if check.get("conclusion") is not None:
+                check["status"] = "completed"
+            return deepcopy(check)
+        raise AssertionError("Unexpected patch: " + path)
 
 
 class GitHubSoftwarePublicationTests(SoftwareFixture):
@@ -674,9 +728,13 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
     def publish(self):
         return self.host.publish(self.bundle, self.result, self.repo, at=self.at)
 
+    def remote_reference_mutations(self):
+        return [call for call in self.api.mutations if call[1].endswith(
+            ("/git/refs", "/pulls", "/check-runs", "/dispatches"))
+            or "/check-runs/" in call[1]]
+
     def assert_no_remote_reference_mutations(self):
-        self.assertFalse(any(path.endswith(("/git/refs", "/pulls", "/dispatches"))
-                             for _, path, _ in self.api.mutations))
+        self.assertFalse(self.remote_reference_mutations())
 
     def test_publish_creates_exact_draft_and_requests_quality_for_verified_head(self):
         candidate = self.prepared_host()
@@ -705,7 +763,11 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
         dispatch = next(body for _, path, body in self.api.mutations if path.endswith("/dispatches"))
         self.assertEqual({"ref": "main", "inputs": {
             "pr-number": "21", "expected-head": candidate["head_sha"], "expected-base": self.base,
+            "request-id": "1234-1",
         }}, dispatch)
+        self.assertEqual(1, len(self.api.checks))
+        self.assertEqual("queued", next(iter(self.api.checks.values()))["status"])
+        self.assertEqual("1234-1", published["quality_request_id"])
         self.assertFalse(any("merge" in path for _, path, _ in self.api.mutations))
 
     def test_publish_accepts_cli_string_directories_after_host_verification(self):
@@ -845,13 +907,18 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
             self.publish()
         self.assert_no_remote_reference_mutations()
 
-    def test_retry_reconciles_existing_exact_branch_and_draft(self):
+    def test_retry_reconciles_existing_exact_branch_draft_and_quality_run(self):
         self.prepared_host()
         first = self.publish()
         second = self.publish()
         self.assertEqual(first["pull_request"], second["pull_request"])
+        self.assertTrue(second["quality_reconciled"])
+        self.assertTrue(second["quality_requested"])
+        self.assertEqual(next(iter(self.api.quality_runs)), second["quality_run_id"])
         self.assertEqual(1, sum(path.endswith("/git/refs") for _, path, _ in self.api.mutations))
         self.assertEqual(1, sum(path.endswith("/pulls") for _, path, _ in self.api.mutations))
+        self.assertEqual(1, sum(path.endswith("/check-runs") for _, path, _ in self.api.mutations))
+        self.assertEqual(1, sum(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
 
     def test_changed_factory_branch_or_reviewed_pr_is_never_overwritten(self):
         candidate = self.prepared_host()
@@ -866,21 +933,25 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
             self.publish()
         self.assert_no_remote_reference_mutations()
 
-    def test_failed_quality_dispatch_leaves_exact_draft_for_safe_recovery(self):
+    def test_failed_quality_dispatch_stays_reserved_until_reconciled_without_duplicate(self):
         self.prepared_host()
         self.api.fail_dispatch = True
-        with self.assertRaisesRegex(ValueError, "dispatch"):
+        with self.assertRaisesRegex(ValueError, "dispatch response uncertain"):
             self.publish()
         self.assertEqual(1, len(self.api.refs))
         self.assertEqual(1, len(self.api.pulls))
+        self.assertEqual(1, len(self.api.checks))
         self.assertTrue(self.api.pulls[0]["draft"])
         self.assertTrue(self.host.publication_state["published"])
-        self.assertFalse(self.host.publication_state["quality_requested"])
-        self.assertEqual("https://github.com/fixture/software/pull/21", self.host.publication_state["url"])
+        self.assertIsNone(self.host.publication_state["quality_requested"])
+        self.assertIn("Do not retry", self.host.publication_state["recovery"])
+        self.assertEqual("https://github.com/fixture/software/pull/21",
+                         self.host.publication_state["url"])
         self.api.fail_dispatch = False
-        result = self.publish()
-        self.assertTrue(result["quality_requested"])
-        self.assertFalse(result["quality_passed"])
+        with self.assertRaisesRegex(ValueError, "human reconciliation required"):
+            self.publish()
+        self.assertEqual(1, sum(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
+        self.assertEqual(1, sum(path.endswith("/check-runs") for _, path, _ in self.api.mutations))
         self.assertEqual(1, sum(path.endswith("/pulls") for _, path, _ in self.api.mutations))
 
     def test_pr_drift_after_creation_is_rechecked_before_quality_dispatch(self):
@@ -911,20 +982,116 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
                     self.publish()
                 self.assert_no_remote_reference_mutations()
 
-    def test_lost_pr_creation_response_is_uncertain_and_reconciled_on_retry(self):
+    def test_lost_pr_creation_response_is_reconciled_in_same_attempt(self):
         self.prepared_host()
         self.api.lose_pull_response = True
-        with self.assertRaisesRegex(ValueError, "lost"):
-            self.publish()
-        self.assertIsNone(self.host.publication_state["published"])
-        self.assertFalse(self.host.publication_state["quality_requested"])
-        self.assertEqual(1, len(self.api.pulls))
-        self.api.lose_pull_response = False
         published = self.publish()
         self.assertTrue(published["published"])
+        self.assertTrue(published["quality_requested"])
         self.assertEqual(21, published["pull_request"])
+        self.assertTrue(published["recovery"]["recovered_pr_response"])
         self.assertEqual(1, sum(path.endswith("/pulls") for _, path, _ in self.api.mutations))
+        self.assertEqual(1, sum(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
 
+
+
+    def test_lost_branch_response_adopts_exact_reference_without_overwrite(self):
+        candidate = self.prepared_host()
+        self.api.lose_branch_response = True
+        published = self.publish()
+        self.assertTrue(published["published"])
+        self.assertTrue(published["recovery"]["recovered_branch_response"])
+        self.assertEqual(candidate["head_sha"], self.api.refs[0]["object"]["sha"])
+        self.assertEqual(1, sum(path.endswith("/git/refs") for _, path, _ in self.api.mutations))
+        self.assertEqual(1, sum(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
+
+    def test_lost_check_reservation_response_adopts_exact_owner(self):
+        self.prepared_host()
+        self.api.lose_check_response = True
+        published = self.publish()
+        self.assertTrue(published["quality_requested"])
+        self.assertTrue(published["recovery"]["recovered_quality_reservation"])
+        self.assertEqual(1, len(self.api.checks))
+        self.assertEqual(1, len(self.api.quality_runs))
+        self.assertEqual(1, sum(path.endswith("/check-runs") for _, path, _ in self.api.mutations))
+
+    def test_lost_quality_dispatch_response_reconciles_matching_workflow_run(self):
+        candidate = self.prepared_host()
+        self.api.lose_dispatch_response = True
+        published = self.publish()
+        self.assertTrue(published["quality_requested"])
+        self.assertTrue(published["quality_reconciled"])
+        self.assertTrue(published["recovery"]["recovered_quality_dispatch"])
+        self.assertEqual(1, len(self.api.quality_runs))
+        self.assertEqual(1, sum(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
+        repeated = self.publish()
+        self.assertTrue(repeated["quality_reconciled"])
+        self.assertEqual(candidate["head_sha"], repeated["candidate_sha"])
+        self.assertEqual(1, sum(path.endswith("/dispatches") for _, path, _ in self.api.mutations))
+
+    def test_quality_controller_handoff_preserves_reserved_check_generation(self):
+        self.prepared_host()
+        published = self.publish()
+        check = self.api.checks[published["quality_check_id"]]
+        queued_id = automation.check_owner(check)
+        self.assertEqual("request", queued_id["k"])
+        self.assertEqual("1234-1", queued_id["q"])
+        self.assertEqual(self.base, queued_id["b"])
+        quality_id = published["quality_run_id"] or next(iter(self.api.quality_runs))
+        run = self.api.quality_runs[quality_id]
+        run["status"] = "in_progress"
+        quality_context = {**self.context, "run_id": str(quality_id),
+                           "event_name": "workflow_dispatch"}
+        controller = automation.Host(self.api, quality_context)
+        started = controller.start(21, self.api.candidate["head_sha"], self.base, "1234-1")
+        self.assertTrue(started["eligible"])
+        updated = self.api.checks[published["quality_check_id"]]
+        owner = automation.check_owner(updated)
+        self.assertEqual("run", owner["k"])
+        self.assertEqual(queued_id["g"], owner["g"])
+        self.assertEqual(quality_id, owner["i"])
+        self.assertEqual(1, sum(path.endswith("/check-runs") for _, path, _ in self.api.mutations))
+        # The publisher is read-only on replay, even after ownership passes
+        # from the Software request to the independent Quality controller.
+        before = len(self.remote_reference_mutations())
+        self.assertTrue(self.publish()["quality_reconciled"])
+        self.assertEqual(before, len(self.remote_reference_mutations()))
+
+    def test_duplicate_or_wrong_quality_provenance_cannot_clear_reserved_request(self):
+        self.prepared_host()
+        self.publish()
+        before = len(self.remote_reference_mutations())
+        quality_id = next(iter(self.api.quality_runs))
+        original = deepcopy(self.api.quality_runs[quality_id])
+        for variant in ("wrong-base", "wrong-title", "wrong-workflow", "duplicate"):
+            with self.subTest(variant=variant):
+                self.api.quality_runs = {quality_id: deepcopy(original)}
+                if variant == "wrong-base":
+                    self.api.quality_runs[quality_id]["head_sha"] = "f" * 40
+                elif variant == "wrong-title":
+                    self.api.quality_runs[quality_id]["display_title"] = "unrelated dispatch"
+                elif variant == "wrong-workflow":
+                    self.api.quality_runs[quality_id]["workflow_id"] = 999
+                else:
+                    self.api.quality_runs[quality_id + 1] = {
+                        **deepcopy(original), "id": quality_id + 1}
+                with self.assertRaisesRegex(ValueError, "quality|Quality|dispatch|reserved|Workflow provenance"):
+                    self.publish()
+                self.assertEqual(before, len(self.remote_reference_mutations()))
+        self.api.quality_runs = {quality_id: original}
+
+    def test_superseding_quality_request_blocks_old_factory_replay(self):
+        self.prepared_host()
+        published = self.publish()
+        check = self.api.checks[published["quality_check_id"]]
+        previous = automation.check_owner(check)
+        check["external_id"] = automation.owner_text(automation.owner(
+            21, self.base, "request", 9999, 1, "9999-1",
+            previous["g"] + 1, intent=previous["t"]))
+        before = len(self.remote_reference_mutations())
+        with self.assertRaisesRegex(ValueError, "different or stale"):
+            self.publish()
+        self.assertEqual(before, len(self.remote_reference_mutations()))
 
 class GitHubSoftwareExecutedRegressionTests(unittest.TestCase):
     def test_same_behavioral_oracle_rejects_the_unfixed_candidate_and_accepts_the_fix(self):

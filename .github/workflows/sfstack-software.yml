@@ -159,11 +159,18 @@ jobs:
     if: needs.verify.outputs.passed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Share the quality-check writer lock. The agent/verification jobs have no
+    # check, PR or content-write permission; only this trusted job reserves a
+    # bounded, pending quality request before it dispatches a controller.
+    concurrency:
+      group: sfstack-quality-publication-${{ github.repository }}
+      queue: max
     permissions:
       contents: write
       issues: read
       pull-requests: write
       actions: write
+      checks: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
