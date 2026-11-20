@@ -239,7 +239,7 @@ def render(bundle, candidate, output, at=None):
     output.mkdir(parents=True, exist_ok=False)
     template = {"run_id": run["run_id"], "subject": run["subject"], "status": "inconclusive",
         "summary": "Replace with the supported build outcome.", "criteria_addressed": [],
-        "behavior_changes": [], "checks_run": [], "remaining_work": [], "edits": []}
+        "behavior_changes": [], "checks_run": [], "remaining_work": [], "limitations": [], "edits": []}
     if target["mode"] == "defect":
         template["diagnosis"] = {
             **{field: "" for field in defect.FIELDS},
@@ -255,11 +255,26 @@ def render(bundle, candidate, output, at=None):
         "limits": "At most 8 files, 32 KiB per file, 64 KiB total; no deletes, renames, mode changes, or external effects. Two repair cycles."}
     # Human PR review is a separate non-authorizing quality boundary, not
     # unfinished builder implementation. True unmet criteria still block.
-    guidance = ("\n\nSubmission status: a `passed` change must have an empty "
-                "`remaining_work` list. Reserve `remaining_work` for genuine "
-                "unmet criteria or implementation blockers; ordinary human PR "
-                "review occurs after the draft and belongs in the summary. "
-                "Never hide genuine blockers to claim a pass.\n")
+    guidance = ("\n\n# Mandatory response contract (read before submit_change)\n\n"
+                "- If all selected acceptance criteria are implemented and your local checks "
+                "support a pass, set `status=passed` and `remaining_work=[]` exactly. "
+                "The trusted host will still independently reproduce and verify the result.\n"
+                "- `remaining_work` means work *actually unfinished* for the selected issue: "
+                "an unmet acceptance criterion, absent implementation, blocked prerequisite, "
+                "or inability to establish correctness. A nonempty list ALWAYS prevents "
+                "publication, even if the text sounds advisory. Report failed, blocked, "
+                "or inconclusive as appropriate; never conceal real unfinished work.\n"
+                "- Put non-blocking residual risks, suggested future hardening, sandbox "
+                "limitations, and mandatory Quality Factory or human review in the optional "
+                "`limitations` list. These do not assert that review was completed or "
+                "override the host's verification or approval requirements.\n"
+                "- Example: an implementation is complete but the filtering policy may need "
+                "future hardening and independent review remains required. That is "
+                "`status=passed`, `remaining_work=[]`, `limitations=[...]`, subject "
+                "to fresh host checks and human approval. If a *required* criterion "
+                "cannot be met, it belongs in `remaining_work` with a nonpassing status.\n"
+                "- The response is schema-validated exactly once. Return the complete bounded "
+                "JSON through submit_change; do not push, publish, or merge.\n")
     invocation = render_skill("sf-build-change", context) + guidance
     if target["mode"] == "defect":
         diagnosis_context = {
@@ -465,6 +480,7 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
         "changed_paths": [e["path"] for e in candidate["edits"]], "behavior_changes": response["behavior_changes"],
         "checks_run": results, "agent_checks_claimed": response["checks_run"], "compatibility_notes": [],
         "documentation_needs": [], "remaining_work": response["remaining_work"],
+        "builder_limitations": response.get("limitations", []),
         "verification_subject": verify_run["subject"], "acceptance_basis": "Builder claims plus measured host checks; independent quality and human review remain.",
         **({"diagnosis_artifact": "diagnosis.json", "defect_evidence": "defect-evidence.json"} if defect_record else {})},
         proof, [{"id": "host-verification", "status": status, "evidence": ["verification-report"],
@@ -501,6 +517,9 @@ def verify(repo, bundle, submission_path, agent_result, output, at=None):
                   f"RED: {defect_record['red']['tests_run']} tests; real assertion failure on `{preflight['red_head_sha']}`.",
                   f"GREEN: {defect_record['green']['tests_run']} tests; {defect_record['green']['status']} on `{candidate['head_sha']}`.",
                   "See red.patch, diagnosis.json, defect-evidence.json and logs for the exact commands and outputs."]
+    if response.get("limitations"):
+        lines += ["", "## Builder-reported nonblocking limitations (not independently attested)", ""]
+        lines += [f"- {item}" for item in response["limitations"]]
     lines += ["", "The build preserves the original issue, acceptance criteria, base, scoped edits, agent claims, and actual host logs.",
               "A passing build may be published as a draft. The separate Quality Factory and human review remain required; no merge is authorized."]
     (output / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -631,6 +650,8 @@ class SoftwareHost(automation.Host):
             f"Implements the selected increment from #{target['issue']['number']}.", "",
             "## Acceptance criteria", "", *[f"- {c['description']}" for c in target['criteria']], "",
             *(defect.pr_section(target, defect_record) if defect_record else []),
+            *(["## Builder-reported limitations (unverified)", "", *[f"- {item}" for item in response["limitations"]], ""]
+              if response.get("limitations") else []),
             "## Evidence", "", f"- [Build evidence and retained host logs]({evidence_url})",
             f"- Base: `{target['base_sha']}`", f"- Verified candidate: `{candidate['head_sha']}`", "",
             "Created by sfstack's bounded Software Factory. Local verification passed. A separate Quality Factory assessment is requested for this exact head.",
