@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Unprivileged builder preflight for one *raw* sf-build-change JSON response.
 
-Run on the exact bytes that will be supplied as submit_change.change_json.
+Run on the exact UTF-8 JSON file declared as the gh-aw custom safe-output
+job's agent artifact. The safe-output tool receives only its SHA-256 receipt.
 This diagnostic does NOT grant publication authority and never replaces the
 trusted host's separate strict parsing, scope checks, or verification.
 """
@@ -64,7 +65,7 @@ def check(proposal, schema, template):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--proposal", required=True, type=Path,
-                        help="File containing EXACT raw change_json bytes, not the safe-output envelope")
+                        help="Exact raw proposal.json bytes for the declared, redacted agent artifact")
     parser.add_argument("--schema", required=True, type=Path)
     parser.add_argument("--template", required=True, type=Path)
     args = parser.parse_args(argv)

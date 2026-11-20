@@ -103,10 +103,11 @@ class SoftwareFixture(unittest.TestCase):
         return response
 
     def submit(self, response):
-        raw = json.dumps(response)
+        raw = json.dumps(response).encode("utf-8")
+        (self.submission.parent / "proposal.json").write_bytes(raw)
         self.write(self.submission, {"items": [{
-            "type": "submit_change", "change_json": raw,
-            "change_sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest()}]})
+            "type": "submit_change",
+            "change_sha256": hashlib.sha256(raw).hexdigest()}]})
 
     def verify(self, agent_result="success"):
         if self.result.exists():
@@ -331,8 +332,7 @@ class GitHubSoftwareTests(SoftwareFixture):
         response = self.response()
         outer = load_json(self.submission)
         submitted = outer["items"][0]
-        original = submitted["change_json"]
-        original_sha = submitted["change_sha256"]
+        self.assertNotIn("change_json", submitted)
 
         # Mimic v1.2.2's loss of escaped newline source, without real secrets.
         code = response["edits"][0]["content"]
@@ -344,7 +344,7 @@ class GitHubSoftwareTests(SoftwareFixture):
         altered = clean.replace("\\\\n", "(n/redacted)", 3)
         self.assertNotEqual(clean, altered)
         self.assertEqual(3, altered.count("(n/redacted)"))
-        submitted["change_json"] = altered
+        (self.submission.parent / "proposal.json").write_text(altered, encoding="utf-8")
         submitted["change_sha256"] = hashlib.sha256(clean.encode("utf-8")).hexdigest()
         self.write(self.submission, outer)
 
@@ -361,7 +361,7 @@ class GitHubSoftwareTests(SoftwareFixture):
         gate = load_json(self.result / "gate.json")
         self.assertFalse(gate["passed"])
         self.assertEqual("blocked", gate["status"])
-        self.assertIn("Safe-output transport changed", gate["reasons"][0])
+        self.assertIn("Agent proposal artifact changed after preflight", gate["reasons"][0])
         self.assertFalse((self.result / "candidate.json").exists())
         self.assertFalse((self.result / "logs" / "answer-behavior.txt").exists())
         self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
@@ -380,7 +380,7 @@ class GitHubSoftwareTests(SoftwareFixture):
                 else:
                     corrupted["items"][0]["change_sha256"] = digest
                 self.write(self.submission, corrupted)
-                with self.assertRaisesRegex(ValueError, "SHA-256|Safe-output transport|change_sha256"):
+                with self.assertRaisesRegex(ValueError, "SHA-256|proposal artifact changed|change_sha256|without inline code"):
                     software.load_response(self.submission, load_json(self.bundle / "run.json"),
                                            load_json(self.bundle / "target.json"))
                 self.assertEqual(self.base, self.git("rev-parse", "HEAD"))
@@ -769,6 +769,18 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
         with self.assertRaises(ValueError):
             self.publish()
         self.assertEqual([], self.api.mutations)
+
+    def test_retained_proposal_bytes_cannot_change_between_verifier_and_publisher(self):
+        self.prepared_host()
+        evidence = self.result / "proposal.json"
+        original = evidence.read_bytes()
+        self.assertIn("proposal.json", load_json(self.result / "gate.json")["digests"])
+        evidence.write_bytes(original + b"\n")
+        with self.assertRaisesRegex(ValueError, "Build gate is negative"):
+            self.publish()
+        self.assertEqual([], self.api.mutations)
+        evidence.write_bytes(original)
+        self.assertTrue(self.publish()["published"])
 
     def test_modified_host_log_cannot_be_republished_as_passing_proof(self):
         self.prepared_host()

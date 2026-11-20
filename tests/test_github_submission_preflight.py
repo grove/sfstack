@@ -37,8 +37,9 @@ class SubmissionPreflightTests(SoftwareFixture):
         self.assertNotIn("Advisory limitation stated once.", result.stderr)
 
         # Exact host transport remains fail-closed, with no candidate applied.
+        (self.submission.parent / "proposal.json").write_text(duplicate, encoding="utf-8")
         self.write(self.submission, {"items": [
-            {"type": "submit_change", "change_json": duplicate,
+            {"type": "submit_change",
              "change_sha256": hashlib.sha256(duplicate.encode("utf-8")).hexdigest()}]})
         with self.assertRaisesRegex(ValueError, "Duplicate JSON key"):
             self.verify()
@@ -120,9 +121,9 @@ class SubmissionPreflightTests(SoftwareFixture):
         self.assertIn("preflight_change.py", guidance)
         self.assertIn("change-template.json", guidance)
         self.assertIn("change.schema.json", guidance)
-        self.assertIn("--proposal /tmp/gh-aw/sfstack-software/proposal.json", guidance)
+        self.assertIn("--proposal /tmp/gh-aw/agent/sfstack-software/proposal.json", guidance)
         self.assertIn("ALREADY has a `limitations` property", guidance)
         self.assertIn("Duplicate keys, including nested ones", guidance)
         self.assertIn("json.dumps", guidance)
-        self.assertIn("Submit exactly the validated file contents", guidance)
+        self.assertIn("Do not submit the source JSON as a safe-output string", guidance)
         self.assertIn("Quality Factory, and human approval", guidance)

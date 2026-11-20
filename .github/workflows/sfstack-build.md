@@ -38,31 +38,39 @@ safe-outputs:
     report-as-issue: false
   jobs:
     submit-change:
-      description: Submit exactly one bounded change proposal as JSON for independent host verification.
+      description: Register one bounded, compiler-redacted proposal artifact for independent host verification.
       runs-on: ubuntu-latest
       if: needs.agent.result == 'success'
       permissions:
         contents: read
+      # This is the upstream-supported custom-job agent-file dependency.
+      # The compiler's secret-redaction step runs before uploading this file.
+      # The general-purpose safe-output text sanitizer never sees source code.
+      artifacts:
+        - /tmp/gh-aw/agent/sfstack-software/proposal.json
       inputs:
-        change_json:
-          description: JSON response matching context/change.schema.json, not Markdown.
-          required: true
-          type: string
-          max-length: 100000
         change_sha256:
-          description: Exact lowercase SHA-256 of the preflight-checked UTF-8 change_json bytes.
+          description: Exact lowercase SHA-256 of the preflight-checked proposal.json bytes.
           required: true
           type: string
           max-length: 64
       steps:
-        - name: Retain change submission
-          run: |
-            mkdir -p change-submission
-            cp "$GH_AW_AGENT_OUTPUT" change-submission/submission.json
+        - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+          with:
+            ref: ${{ github.workflow_sha }}
+            path: controller
+            persist-credentials: false
+        - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+          with:
+            python-version: '3.13'
+        - name: Stage fixed, compiler-redacted proposal and receipt
+          run: >-
+            python controller/integrations/github/stage_change_artifact.py
+            --agent-output "$GH_AW_AGENT_OUTPUT" --out change-submission
         - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
           with:
             name: sfstack-agent-change-${{ github.run_attempt }}
-            path: change-submission/submission.json
+            path: change-submission/
             if-no-files-found: error
             retention-days: 14
 steps:
@@ -123,18 +131,18 @@ Perform the bounded `sf-build-change` invocation in
    The host validates permitted paths, applies the proposal to a fresh checkout,
    and runs verification independently. Your local edits and test claims are
    supporting evidence; they cannot directly publish or clear a quality gate.
-7. Run the rendered agent-side JSON preflight on the **exact** raw UTF-8
-   `change_json` file. Supply its printed SHA-256 hex digest separately as
-   `change_sha256` in the **same** `submit_change` call. Supply `change_json`
-   from the unchanged checked file bytes; do not retype, reformat, or transform
-   the submitted JSON after hashing. For example, within the permitted local
-   tooling: `safeoutputs submit_change --change_json . --change_sha256 <digest>`
-   with the raw file piped on standard input. A digest mismatch after the
-   safe-output sanitizer is a **hard negative**: do not attempt to reconstruct,
-   decrypt, encode around, undo, or disable redaction. The trusted verifier
-   separately compares the received bytes **before running any candidate code**.
-   Do not include Markdown fences around the JSON. Submit a negative response
-   when appropriate rather than a no-op. Do not push branches, open or update
+7. Write the one complete raw UTF-8 JSON proposal to the **fixed** path
+   `/tmp/gh-aw/agent/sfstack-software/proposal.json`, creating the directory
+   if necessary. Do not write an envelope. Run the rendered agent-side preflight
+   on this exact file and record its lowercase SHA-256 receipt. Call
+   `submit_change` exactly once with **only**
+   `--change_sha256 <receipt>`; never include source code in the safe-output
+   text fields. The declared file is transported through gh-aw's
+   compiler-managed, **secret-redacted agent artifact** to the read-only
+   submit-change job. The trusted verifier separately compares the received
+   file's bytes **before running candidate code**. If secret redaction changes
+   bytes, the receipt check fails closed; never reconstruct masked bytes,
+   encode around, or disable redaction. Do not push branches, open or update
    issues or PRs, merge, deploy, send messages, or attempt credential access.
 
 The trusted publisher can create one draft PR only after fresh host verification
