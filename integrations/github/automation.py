@@ -26,6 +26,7 @@ QUALITY = "sfstack-quality.yml"
 SIGNAL = "sfstack-pr-signal.yml"
 EVENTS = "sfstack-quality-events.yml"
 SHA = re.compile(r"[a-f0-9]{40}\Z")
+INTENT_DIGEST = re.compile(r"[a-f0-9]{64}\Z")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 REQUEST_ID = re.compile(r"[1-9][0-9]*-[1-9][0-9]*\Z")
 RUN_TITLE = re.compile(r"sfstack quality / PR #([1-9][0-9]*) / request (manual|[1-9][0-9]*-[1-9][0-9]*)\Z")
@@ -126,7 +127,7 @@ def owner(pr, base, kind, identifier, attempt, request_id, generation=1, intent=
     identity = {"v": 3, "g": generation, "p": pr, "b": base, "k": kind, "i": identifier,
                 "a": attempt, "q": request_id or "manual"}
     if intent is not None:
-        if not isinstance(intent, str) or SHA.fullmatch(intent) is None:
+        if not isinstance(intent, str) or INTENT_DIGEST.fullmatch(intent) is None:
             raise ValueError("Invalid pinned PR acceptance-intent digest.")
         identity["t"] = intent
     return identity
@@ -147,7 +148,7 @@ def check_owner(check):
                  or (value.get("v") == 3
                      and set(value) in (v3_fields, v3_fields | {"t"})
                      and positive(value["g"])
-                     and ("t" not in value or isinstance(value["t"], str) and SHA.fullmatch(value["t"]))))
+                     and ("t" not in value or isinstance(value["t"], str) and INTENT_DIGEST.fullmatch(value["t"]))))
                 or not all(positive(value[key]) for key in ("p", "i", "a"))
                 or value["k"] not in {"request", "run", "stale"} or not SHA.fullmatch(value["b"])
                 or not (value["q"] == "manual" or REQUEST_ID.fullmatch(value["q"]))):
