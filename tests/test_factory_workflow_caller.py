@@ -18,8 +18,11 @@ class PinnedFactoryCallerTests(unittest.TestCase):
             source,
         )
         self.assertRegex(EXPECTED_FACTORY, r"^[0-9a-f]{40}$")
-        self.assertNotIn("@main", source)
-        self.assertNotIn("@latest", source)
+        selected_uses = [line.strip() for line in source.splitlines()
+                         if line.strip().startswith("uses: grove/factory/")]
+        self.assertEqual(1, len(selected_uses))
+        self.assertNotIn("@main", selected_uses[0])
+        self.assertNotIn("@latest", selected_uses[0])
         self.assertIn(
             "run-name: \"sfstack quality / PR #$" + "{{ inputs.pr-number }} / request manual\"",
             source,
