@@ -196,6 +196,31 @@ them in the change-set and draft PR but does **not** treat them as verified
 claims. Actual unmet criteria always require a nonpassing result; never move
 blockers into `limitations` to clear a gate.
 
+For the actual `submit_change.change_json` handoff, the Copilot builder must
+construct **one dictionary** from the rendered `change-template.json`, update
+existing keys (including the already-present `limitations` list), and serialize
+it once. Manual JSON concatenation can create duplicate properties; normal
+`json.loads` silently overwrites them and is **not** a safe validator. Before
+`submit_change`, the builder writes the **exact raw JSON string it will submit**
+to a scratch file outside `candidate/` and runs the unprivileged
+[`preflight_change.py`](../../integrations/github/preflight_change.py) helper
+against the rendered closed schema and pinned identity:
+
+```sh
+python controller/integrations/github/preflight_change.py \
+  --proposal /tmp/gh-aw/sfstack-software/proposal.json \
+  --schema /tmp/gh-aw/sfstack-software/context/change.schema.json \
+  --template /tmp/gh-aw/sfstack-software/context/change-template.json
+```
+
+The command above runs **inside the builder's GitHub Actions workspace**.
+If it fails, the agent must correct its source response and rerun preflight;
+it must not silently normalize an ambiguous payload. The agent then sends
+exactly the tested file bytes as `change_json`, with no further edits.
+Preflight success alone **never** authorizes a PR. The trusted host separately
+enforces duplicate rejection, exact paths and identities, behavioral RED/GREEN,
+full verification, independent Quality Factory and human review.
+
 Preparation pins original source and task inputs; it does not execute checks
 during admission. In `defect` mode the **fresh host**, not the builder,
 executes the existing baseline before the test-only RED candidate and the
@@ -320,6 +345,7 @@ or merges anything. Never paste a token value into an issue, input, log, or PR.
 | Verification passes but no draft PR appears, and the publication step reports a permission error creating a pull request. | **Allow GitHub Actions to create and approve pull requests** is disabled for the repository, or an organization policy prevents it. | A repository administrator can enable the setting in **Settings → Actions → General → Workflow permissions**, subject to organization policy; it applies to workflows in this repository. The workflow creates only drafts and never approves or merges. Inspect existing drafts, then re-run the same attempt if the inputs are unchanged or dispatch a new run. See [Enable the integration](#enable-the-integration). |
 | A draft exists but there is no `sfstack quality` result. | The explicit quality dispatch failed. | Run **sfstack GitHub quality** for that PR using the [quality retry instructions](run-github.md#run-or-retry-manually). |
 | The agent job is green but the verification job says `Passing build lacks complete criteria, behavioral checks, or a complete bounded change.` | The structured `submit_change` can claim `status=passed` while listing unfinished `remaining_work` (or omitting actual checks/edits). Advisory risks and mandatory downstream review should instead be disclosed in `limitations`. | Inspect `sfstack-agent-change-<attempt>` and `sfstack-software-result-<attempt>`. Do not suppress nonempty `remaining_work` or publish; if the controller was updated, dispatch a new run from current `main`. |
+| The Copilot job succeeds, but verification says `Duplicate JSON key.` | The submitted raw `change_json` repeats a property (for example, a second `limitations` appended to the already-present template field). Ordinary JSON decoding may hide the duplicate by keeping only the last value. | Inspect the original `sfstack-agent-change-<attempt>` artifact without normalizing it. Keep the negative gate intact; update the builder to construct one response object, run `preflight_change.py` on the exact raw bytes, and re-dispatch from the new `main` after reviewed controller changes. Never waive duplicate-key validation or replay rejected artifacts. |
 | Verification fails. | The proposed files violate the checks or criteria. | Inspect the retained logs. No draft is published; fix the issue or inputs and dispatch a new run. |
 
 ## Complete the first live acceptance test
