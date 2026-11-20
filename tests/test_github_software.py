@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from urllib.parse import parse_qs, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -347,11 +348,15 @@ class GitHubSoftwareTests(SoftwareFixture):
         submitted["change_sha256"] = hashlib.sha256(clean.encode("utf-8")).hexdigest()
         self.write(self.submission, outer)
 
-        status = software.main([
-            "verify", "--repo", str(self.repo), "--bundle", str(self.bundle),
-            "--submission", str(self.submission), "--agent-result", "success",
-            "--out", str(self.result),
-        ])
+        # The fixture's synthetic run_id must not impersonate this real CI
+        # workflow's GITHUB_RUN_ID. Only disable that external provenance
+        # comparison inside this unit test, not in the production controller.
+        with patch.object(software.quality, "check_actions_run"):
+            status = software.main([
+                "verify", "--repo", str(self.repo), "--bundle", str(self.bundle),
+                "--submission", str(self.submission), "--agent-result", "success",
+                "--out", str(self.result),
+            ])
         self.assertEqual(1, status)
         gate = load_json(self.result / "gate.json")
         self.assertFalse(gate["passed"])
