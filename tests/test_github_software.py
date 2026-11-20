@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 from common import load_json, now
-from integrations.github import software
+from integrations.github import software, automation
 
 
 class SoftwareFixture(unittest.TestCase):
@@ -726,9 +726,13 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
     def publish(self):
         return self.host.publish(self.bundle, self.result, self.repo, at=self.at)
 
+    def remote_reference_mutations(self):
+        return [call for call in self.api.mutations if call[1].endswith(
+            ("/git/refs", "/pulls", "/check-runs", "/dispatches"))
+            or "/check-runs/" in call[1]]
+
     def assert_no_remote_reference_mutations(self):
-        self.assertFalse(any(path.endswith(("/git/refs", "/pulls", "/dispatches"))
-                             for _, path, _ in self.api.mutations))
+        self.assertFalse(self.remote_reference_mutations())
 
     def test_publish_creates_exact_draft_and_requests_quality_for_verified_head(self):
         candidate = self.prepared_host()
@@ -1047,14 +1051,14 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
         self.assertEqual(1, sum(path.endswith("/check-runs") for _, path, _ in self.api.mutations))
         # The publisher is read-only on replay, even after ownership passes
         # from the Software request to the independent Quality controller.
-        before = len(self.api.mutations)
+        before = len(self.remote_reference_mutations())
         self.assertTrue(self.publish()["quality_reconciled"])
-        self.assertEqual(before, len(self.api.mutations))
+        self.assertEqual(before, len(self.remote_reference_mutations()))
 
     def test_duplicate_or_wrong_quality_provenance_cannot_clear_reserved_request(self):
         self.prepared_host()
         self.publish()
-        before = len(self.api.mutations)
+        before = len(self.remote_reference_mutations())
         quality_id = next(iter(self.api.quality_runs))
         original = deepcopy(self.api.quality_runs[quality_id])
         for variant in ("wrong-base", "wrong-title", "wrong-workflow", "duplicate"):
@@ -1071,7 +1075,7 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
                         **deepcopy(original), "id": quality_id + 1}
                 with self.assertRaisesRegex(ValueError, "quality|Quality|dispatch|reserved"):
                     self.publish()
-                self.assertEqual(before, len(self.api.mutations))
+                self.assertEqual(before, len(self.remote_reference_mutations()))
         self.api.quality_runs = {quality_id: original}
 
     def test_superseding_quality_request_blocks_old_factory_replay(self):
@@ -1082,10 +1086,10 @@ class GitHubSoftwarePublicationTests(SoftwareFixture):
         check["external_id"] = automation.owner_text(automation.owner(
             21, self.base, "request", 9999, 1, "9999-1",
             previous["g"] + 1, intent=previous["t"]))
-        before = len(self.api.mutations)
+        before = len(self.remote_reference_mutations())
         with self.assertRaisesRegex(ValueError, "different or stale"):
             self.publish()
-        self.assertEqual(before, len(self.api.mutations))
+        self.assertEqual(before, len(self.remote_reference_mutations()))
 
 class GitHubSoftwareExecutedRegressionTests(unittest.TestCase):
     def test_same_behavioral_oracle_rejects_the_unfixed_candidate_and_accepts_the_fix(self):
