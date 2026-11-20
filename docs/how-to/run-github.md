@@ -18,7 +18,7 @@ or install automatic PR event coordination. The trusted GitHub Actions caller
 at [`.github/workflows/sfstack-quality.yml`](../../.github/workflows/sfstack-quality.yml)
 invokes the reusable Quality Factory from
 [`grove/factory`](https://github.com/grove/factory) at the immutable
-revision `3921ac399844641976bacfc68385c3f3907491d2`.
+revision `550832359160e49e0824010cbd9c7e8f84b32589`.
 
 After the caller is reviewed and merged to sfstack's default branch:
 
