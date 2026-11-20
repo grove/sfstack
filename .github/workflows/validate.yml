@@ -123,3 +123,17 @@ jobs:
           "$RUNNER_TEMP/gh-aw" compile sfstack-review --strict --no-check-update --no-logo
           "$RUNNER_TEMP/gh-aw" compile sfstack-build --strict --no-check-update --no-logo
           git diff --exit-code -- .github/workflows/sfstack-review.lock.yml .github/workflows/sfstack-build.lock.yml .github/aw/actions-lock.json
+
+  external_consumer:
+    name: Install pinned CLI wheel and test outside the checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Exercise versioned public interface from an isolated external consumer
+        run: bash tests/external_consumer/run.sh

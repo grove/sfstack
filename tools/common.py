@@ -11,7 +11,11 @@ import stat
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-ROOT = Path(__file__).resolve().parents[1]
+# Use the checkout while developing and the wheel's immutable bundled snapshot
+# when installed in an independent consumer environment.
+_SOURCE_ROOT = Path(__file__).resolve().parents[1]
+ROOT = (_SOURCE_ROOT if (_SOURCE_ROOT / "schemas/artifact.schema.json").is_file()
+        else Path(__file__).resolve().parent / "sfstack_contracts_data")
 EFFECT_CAPABILITY = {
     "workspace.modify": "workspace.write",
     "tracker.modify": "tracker.write",

@@ -21,6 +21,9 @@ issue tracker, or deployment provider. An integration supplies the capabilities
 available in its environment. Missing capabilities and incomplete evidence remain
 visible; a successful-looking response is not a substitute for a verified result.
 
+
+The [versioned public contract/gate CLI](docs/reference/public-cli.md) provides a read-only, pinned-distribution boundary for future independent hosts. It is not a GitHub controller or a migration of the workflows.
+
 ## Start here
 
 - **Start a local quality run:** [Initialize, inspect, and resume](docs/how-to/run-local.md) with one CLI.
