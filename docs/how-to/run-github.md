@@ -18,7 +18,7 @@ or install automatic PR event coordination. The trusted GitHub Actions caller
 at [`.github/workflows/sfstack-quality.yml`](../../.github/workflows/sfstack-quality.yml)
 invokes the reusable Quality Factory from
 [`grove/factory`](https://github.com/grove/factory) at the immutable
-revision `550832359160e49e0824010cbd9c7e8f84b32589`.
+revision `5ed01e84f98f36f0176e6228b2f71edc0087d930`.
 
 After the caller is reviewed and merged to sfstack's default branch:
 
@@ -98,3 +98,29 @@ This is a targeted, evidence-backed compatibility fix. It must still be
 confirmed with a new manual Quality run on `main`; CI alone does not prove
 the live handoff. If another pre-job error occurs, capture the red GitHub
 workflow-level message verbatim before further changes.
+
+## First live cross-repository reviewer activation (21 November 2026)
+
+The [first run that reached Factory's real reviewer](https://github.com/grove/sfstack/actions/runs/44918424600)
+confirmed manual launch, exact-head admission of draft PR #37, the
+pinned sfstack package, substantive independent test execution, and the
+caller-owned `COPILOT_GITHUB_TOKEN` secret.
+
+It then failed **before executing an agent** because the compiled gh-aw
+reviewer attempted to read `.github/workflows/sfstack-review.md` from
+the caller's empty workspace. The exact-head `sfstack quality` check
+was correctly published as **failure**.
+
+The new pinned Factory revision, `5ed01e84f98f36f0176e6228b2f71edc0087d930`, embeds the
+author-reviewed instructions in the compiled gh-aw lock file and checks
+out the Factory controller at its called workflow SHA rather than the
+caller main SHA. This pin must be reviewed and merged **after**
+[Factory PR #4](https://github.com/grove/factory/pull/4).
+
+After merging both PRs, manually run
+[`sfstack-quality.yml`](../../.github/workflows/sfstack-quality.yml)
+from `main` against **open draft PR #37**, then inspect the newly
+published check, verified exact head and full review output. Do not
+merge PR #37 merely to exercise Quality, do not reuse a failed run as
+positive evidence, and keep remaining recovery and merge-rule
+acceptance open.
