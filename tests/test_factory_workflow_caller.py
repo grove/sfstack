@@ -5,7 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CALLER = ROOT / ".github/workflows/sfstack-quality.yml"
-EXPECTED_FACTORY = "550832359160e49e0824010cbd9c7e8f84b32589"
+EXPECTED_FACTORY = "5ed01e84f98f36f0176e6228b2f71edc0087d930"
 
 
 class PinnedFactoryCallerTests(unittest.TestCase):
