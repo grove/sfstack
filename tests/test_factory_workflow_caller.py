@@ -33,7 +33,7 @@ class PinnedFactoryCallerTests(unittest.TestCase):
         # are materialized, and the preflight job has zero token permissions.
         self.assertIn("  preflight:\n", source)
         self.assertIn("permissions: {}", source)
-        self.assertIn("run: test \\"$GITHUB_REF\\" = \\"$EXPECTED_REF\\"", source)
+        self.assertIn('run: test "$GITHUB_REF" = "$EXPECTED_REF"', source)
         self.assertIn("    needs: preflight", source)
         self.assertNotIn("if: github.ref ==", source)
 
