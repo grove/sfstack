@@ -24,9 +24,9 @@ jobs:
       head-sha: 72ed87e077074ab500d1db809eb48b154f1fee6a
 
   remote_quality_reference:
-    # Active but safe: this push runs on a NON-default branch. The controller's
-    # first and publish jobs reject it before any model, candidate or API write.
-    # It is an identity-denial probe, not a Quality assessment.
+    # Match the sfstack manual caller's exact top-level default-branch gate.
+    # On this diagnostic push ref, the job must be skipped with no agent run.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     uses: grove/factory/.github/workflows/sfstack-quality.yml@550832359160e49e0824010cbd9c7e8f84b32589
     with:
       pr-number: 37
