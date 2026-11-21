@@ -188,3 +188,60 @@ To **enforce** Quality as a merge gate, configure an up-to-date required
 approval in branch rules. Neither PR changes the repository's rulesets.
 Automatic signal/dispatch is not evidence that failure or stale checks
 prevent merging unless those rules are enabled.
+
+## First manual smoke test and evidence record
+
+Use an **open, same-repository, documentation-only draft PR** to test the
+cross-repository Quality handoff without changing executable behavior.
+Do not merge a PR simply to exercise the factory.
+
+Before dispatch, record the PR number, exact head commit and current `main`
+SHA. Start the workflow from **main** with the PR number, not from the PR
+branch. The manual workflow is the only trigger installed in sfstack.
+
+After dispatch, keep a link to the **caller** Actions run and inspect:
+
+- The trusted Factory checkout used the pinned workflow revision, and the
+  candidate checkout used the PR's exact head, not a mutable branch.
+- The independent verification ran the declared nonempty check suite and
+  retained logs and evidence; passing tests alone are not approval.
+- The Quality check on that PR head belongs to the GitHub Actions app,
+  matches the workflow run/attempt and assessment inputs, and has an
+  appropriate nonpassing conclusion if a prerequisite was absent.
+- A newer PR head, changed intent or advanced base must not reuse this
+  assessment. Automatic invalidation and reconciliation are not yet
+  installed in this manual-only pilot, so require a fresh manual run and
+  never use a stale check as clearance.
+
+If Copilot credentials are missing or invalid, preserve the failed run and
+configure the **repository** secret without sharing its contents. Do not
+rerun paid work to disguise a previous failure, and do not assume that a
+visible successful check enforces human approval or branch protection.
+
+Record the actual run link and observations in
+[factory acceptance #1](https://github.com/grove/factory/issues/1). A
+passing CI run for this documentation-only PR does **not** count as the
+manual Quality handoff until the manual workflow is dispatched and its
+result observed.
+
+## Automatic PR-signal acceptance probe (21 November 2026)
+
+This draft PR is deliberately a **documentation-only** acceptance subject
+for the post-merge, cross-repository Quality Factory event route. This
+appendix introduces no executable changes, permissions, workflow edits, or
+policy changes. Its commit is the new PR head that the automated route must
+authenticate; do not replace it with a branch tip inferred from prose.
+
+After this commit's `pull_request.synchronize` event, check the actual
+`sfstack PR signal` run, its authenticated `workflow_run` completion
+handled by `sfstack quality events`, the automatically dispatched
+`sfstack GitHub quality` run, and the `sfstack quality` check on this
+exact commit. Inspect the real independent verifier, Copilot review and
+retained evidence; no report or check should be marked passed merely because
+the signal itself succeeded.
+
+A future `main` change should revoke any stale success without starting
+another paid review. This test PR is **not an authorization to merge**; CI,
+up-to-date Quality and independent human review remain separate merge gates.
+Record the observed positive and negative runs in
+[Factory acceptance #1](https://github.com/grove/factory/issues/1).
