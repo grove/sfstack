@@ -50,3 +50,38 @@ exercise remain separate acceptance work in
 
 Upgrades require a reviewed PR bumping the full Factory SHA in this caller;
 never switch the call to a mutable branch or `latest`.
+
+## First manual smoke test and evidence record
+
+Use an **open, same-repository, documentation-only draft PR** to test the
+cross-repository Quality handoff without changing executable behavior.
+Do not merge a PR simply to exercise the factory.
+
+Before dispatch, record the PR number, exact head commit and current `main`
+SHA. Start the workflow from **main** with the PR number, not from the PR
+branch. The manual workflow is the only trigger installed in sfstack.
+
+After dispatch, keep a link to the **caller** Actions run and inspect:
+
+- The trusted Factory checkout used the pinned workflow revision, and the
+  candidate checkout used the PR's exact head, not a mutable branch.
+- The independent verification ran the declared nonempty check suite and
+  retained logs and evidence; passing tests alone are not approval.
+- The Quality check on that PR head belongs to the GitHub Actions app,
+  matches the workflow run/attempt and assessment inputs, and has an
+  appropriate nonpassing conclusion if a prerequisite was absent.
+- A newer PR head, changed intent or advanced base must not reuse this
+  assessment. Automatic invalidation and reconciliation are not yet
+  installed in this manual-only pilot, so require a fresh manual run and
+  never use a stale check as clearance.
+
+If Copilot credentials are missing or invalid, preserve the failed run and
+configure the **repository** secret without sharing its contents. Do not
+rerun paid work to disguise a previous failure, and do not assume that a
+visible successful check enforces human approval or branch protection.
+
+Record the actual run link and observations in
+[factory acceptance #1](https://github.com/grove/factory/issues/1). A
+passing CI run for this documentation-only PR does **not** count as the
+manual Quality handoff until the manual workflow is dispatched and its
+result observed.
