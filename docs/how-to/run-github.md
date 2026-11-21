@@ -85,3 +85,25 @@ Record the actual run link and observations in
 passing CI run for this documentation-only PR does **not** count as the
 manual Quality handoff until the manual workflow is dispatched and its
 result observed.
+
+## Automatic PR-signal acceptance probe (21 November 2026)
+
+This draft PR is deliberately a **documentation-only** acceptance subject
+for the post-merge, cross-repository Quality Factory event route. This
+appendix introduces no executable changes, permissions, workflow edits, or
+policy changes. Its commit is the new PR head that the automated route must
+authenticate; do not replace it with a branch tip inferred from prose.
+
+After this commit's `pull_request.synchronize` event, check the actual
+`sfstack PR signal` run, its authenticated `workflow_run` completion
+handled by `sfstack quality events`, the automatically dispatched
+`sfstack GitHub quality` run, and the `sfstack quality` check on this
+exact commit. Inspect the real independent verifier, Copilot review and
+retained evidence; no report or check should be marked passed merely because
+the signal itself succeeded.
+
+A future `main` change should revoke any stale success without starting
+another paid review. This test PR is **not an authorization to merge**; CI,
+up-to-date Quality and independent human review remain separate merge gates.
+Record the observed positive and negative runs in
+[Factory acceptance #1](https://github.com/grove/factory/issues/1).
