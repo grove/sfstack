@@ -22,9 +22,21 @@ permissions:
   checks: write
 
 jobs:
+  preflight:
+    name: Confirm manual caller is on the default branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # No candidate checkout, publisher credential, or Copilot token.
+    permissions: {}
+    steps:
+      - name: Verify default branch before invoking Factory
+        env:
+          EXPECTED_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: test "$GITHUB_REF" = "$EXPECTED_REF"
+
   quality:
     name: Run pinned factory Quality
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: preflight
     # SHA pinned to the reviewed factory reusable workflow, never @main/@latest.
     uses: grove/factory/.github/workflows/sfstack-quality.yml@550832359160e49e0824010cbd9c7e8f84b32589
     with:
