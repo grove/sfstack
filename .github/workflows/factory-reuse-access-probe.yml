@@ -1,0 +1,23 @@
+name: Factory reusable workflow access probe (no agent)
+on:
+  push:
+    branches: [test/factory-reuse-access-20261121]
+
+# Diagnostic only; deliberately skip any Copilot-capable reusable workflow.
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Confirm caller workflow executes
+        run: echo 'Local diagnostic started; no model or publication requested.'
+  remote_review_reference:
+    if: ${{ false }}
+    uses: grove/factory/.github/workflows/sfstack-review.lock.yml@550832359160e49e0824010cbd9c7e8f84b32589
+    with:
+      head-sha: 72ed87e077074ab500d1db809eb48b154f1fee6a
