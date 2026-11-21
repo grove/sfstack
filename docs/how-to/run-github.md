@@ -21,7 +21,7 @@ shown below; the controller still lives only in Factory. The trusted GitHub Acti
 at [`.github/workflows/sfstack-quality.yml`](../../.github/workflows/sfstack-quality.yml)
 invokes the reusable Quality Factory from
 [`grove/factory`](https://github.com/grove/factory) at the immutable
-revision `e57a9b24bf09f3f4a94e303a9cd0f724d46fec27`.
+revision `4078dd9b529debf78efba998cd00b18e5b81fb53`.
 
 After the caller is reviewed and merged to sfstack's default branch:
 
@@ -114,7 +114,7 @@ reviewer attempted to read `.github/workflows/sfstack-review.md` from
 the caller's empty workspace. The exact-head `sfstack quality` check
 was correctly published as **failure**.
 
-The new pinned Factory revision, `e57a9b24bf09f3f4a94e303a9cd0f724d46fec27`, embeds the
+The new pinned Factory revision, `4078dd9b529debf78efba998cd00b18e5b81fb53`, embeds the
 author-reviewed instructions in the compiled gh-aw lock file and checks
 out the Factory controller at its called workflow SHA rather than the
 caller main SHA. This pin must be reviewed and merged **after**
@@ -134,7 +134,7 @@ acceptance open.
 `grove/sfstack`, but the actual coordinator, verifier, Copilot reviewer,
 evidence gate and check publisher still live in [`grove/factory`](https://github.com/grove/factory).
 All called workflows are pinned to the same reviewed Factory commit,
-`e57a9b24bf09f3f4a94e303a9cd0f724d46fec27`. No `npx skills` install, local Factory code copy, or
+`4078dd9b529debf78efba998cd00b18e5b81fb53`. No `npx skills` install, local Factory code copy, or
 central cross-repository credential is needed; the reviewed Factory wheel
 already bundles the canonical sfstack skills and contracts.
 
