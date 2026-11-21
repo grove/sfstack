@@ -35,6 +35,10 @@ class PinnedFactoryCallerTests(unittest.TestCase):
         self.assertIn("permissions: {}", source)
         self.assertIn('run: test "$GITHUB_REF" = "$EXPECTED_REF"', source)
         self.assertIn("    needs: preflight", source)
+        # GitHub may stringify workflow_dispatch numeric inputs before a
+        # workflow_call; passing them directly can fail before any job exists.
+        self.assertIn("      pr-number: $" + "{{ fromJSON(inputs.pr-number) }}", source)
+        self.assertNotIn("      pr-number: $" + "{{ inputs.pr-number }}", source)
         self.assertNotIn("if: github.ref ==", source)
 
     def test_caller_does_not_fetch_or_run_untrusted_controller_code(self):

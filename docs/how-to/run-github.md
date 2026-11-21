@@ -72,3 +72,29 @@ success, while Factory retains its own independent branch/run provenance
 checks. If server-side validation still rejects the call before jobs,
 inspect the exact red error banner on the Actions run page; do not rerun
 Copilot blindly or weaken checks and publishing permissions.
+
+## Numeric workflow_dispatch input forwarding
+
+The first two manual requests for PR #37,
+[runs 44916611652](https://github.com/grove/sfstack/actions/runs/44916611652)
+and [44917531606](https://github.com/grove/sfstack/actions/runs/44917531606),
+failed at workflow creation; the second reached the caller's credential-free
+preflight but created **no Factory jobs**. No quality or Copilot result was
+produced. The Actions REST API does not expose the workflow error banner.
+
+An independent, no-agent test invoked the same pinned Factory workflow with a
+literal numeric PR input and a preflight dependency, and the Factory jobs
+**were created**, then failed closed on the test branch as intended:
+[run 44917753151](https://github.com/grove/sfstack/actions/runs/44917753151).
+The manual caller previously forwarded the numeric `workflow_dispatch` input
+directly, `pr-number: ${{ inputs.pr-number }}`. GitHub's known
+[runner issue #2848](https://github.com/actions/runner/issues/2848) documents
+this exact failure mode and the `fromJSON` workaround. The caller now uses
+`pr-number: ${{ fromJSON(inputs.pr-number) }}` to hand the called workflow
+a true number, retaining the number input's UI validation and the pinned
+Factory revision.
+
+This is a targeted, evidence-backed compatibility fix. It must still be
+confirmed with a new manual Quality run on `main`; CI alone does not prove
+the live handoff. If another pre-job error occurs, capture the red GitHub
+workflow-level message verbatim before further changes.
