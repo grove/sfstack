@@ -1,0 +1,24 @@
+name: sfstack quality events
+
+# This caller is loaded from the default branch for workflow_run and push.
+# Its only job invokes the pinned Factory coordinator; it never checks out PR
+# code, consumes a Copilot token, downloads artifacts or publishes results.
+on:
+  workflow_run:
+    workflows: [sfstack PR signal, sfstack GitHub quality]
+    types: [in_progress, completed]
+  push:
+    branches: [main]
+
+# Upper bound for the called jobs. Factory narrows permissions per job:
+# only dispatch has actions:write; invalidate/reconcile have actions:read.
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+  checks: write
+
+jobs:
+  coordinate:
+    name: Apply authenticated Factory Quality event logic
+    uses: grove/factory/.github/workflows/sfstack-quality-events.yml@e57a9b24bf09f3f4a94e303a9cd0f724d46fec27

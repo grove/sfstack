@@ -1,0 +1,21 @@
+name: sfstack PR signal
+
+# Untrusted PR changes only produce a token-free signal; the default-branch
+# event coordinator reads the authoritative PR/run identity through GitHub.
+# Fork PRs and changes targeting other branches do not trigger Factory.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+permissions: {}
+
+jobs:
+  signal:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Signal that the PR needs assessment
+        run: echo 'The trusted sfstack coordinator resolves current PR state through GitHub.'

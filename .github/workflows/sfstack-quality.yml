@@ -1,8 +1,9 @@
-name: sfstack GitHub quality (manual via factory)
+name: sfstack GitHub quality
 
-# Manual-only pilot. This exact filename and run-name are authenticated by
-# the factory publisher against the caller's GitHub Actions run.
-# Do not add PR triggers or permit a PR to select its own controller revision.
+# Manual operator dispatch plus authenticated coordinator dispatch. This exact
+# filename/run-name is validated against the caller's real GitHub Actions run.
+# PR events are handled only by the separate credential-free signal and trusted
+# default-branch event coordinator. Never allow a PR to select a Factory ref.
 on:
   workflow_dispatch:
     inputs:
@@ -10,8 +11,20 @@ on:
         description: Open sfstack pull request number to assess
         required: true
         type: number
+      expected-head:
+        description: Automatic dispatch only; immutable PR head SHA
+        required: false
+        type: string
+      expected-base:
+        description: Automatic dispatch only; immutable default-branch base SHA
+        required: false
+        type: string
+      request-id:
+        description: Automatic coordinator identity; leave blank for manual runs
+        required: false
+        type: string
 
-run-name: "sfstack quality / PR #${{ inputs.pr-number }} / request manual"
+run-name: "sfstack quality / PR #${{ inputs.pr-number }} / request ${{ inputs.request-id || 'manual' }}"
 
 # This is the upper bound on the called workflow's job permissions.
 # The candidate and Copilot review never receive a PR/check write token.
@@ -37,11 +50,14 @@ jobs:
   quality:
     name: Run pinned factory Quality
     needs: preflight
-    # SHA pinned to the reviewed factory reusable workflow, never @main/@latest.
-    uses: grove/factory/.github/workflows/sfstack-quality.yml@5ed01e84f98f36f0176e6228b2f71edc0087d930
+    # Exact Factory commit, shared with the event coordinator; never @main/@latest.
+    uses: grove/factory/.github/workflows/sfstack-quality.yml@e57a9b24bf09f3f4a94e303a9cd0f724d46fec27
     with:
       # workflow_dispatch may pass a number as a string to workflow_call;
       # fromJSON preserves the declared numeric type (actions/runner#2848).
       pr-number: ${{ fromJSON(inputs.pr-number) }}
+      expected-head: ${{ inputs.expected-head }}
+      expected-base: ${{ inputs.expected-base }}
+      request-id: ${{ inputs.request-id }}
     secrets:
       COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
