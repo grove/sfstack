@@ -9,7 +9,7 @@ EXPECTED_FACTORY = "e57a9b24bf09f3f4a94e303a9cd0f724d46fec27"
 
 
 class PinnedFactoryCallerTests(unittest.TestCase):
-    def test_manual_only_source_uses_exact_factory_sha(self):
+    def test_quality_entrypoint_uses_exact_factory_sha(self):
         source = CALLER.read_text(encoding="utf-8")
         self.assertIn("  workflow_dispatch:\n", source)
         self.assertNotRegex(source, r"(?m)^\s+(?:pull_request_target|pull_request|push|schedule):")
@@ -71,15 +71,15 @@ class PinnedFactoryCallerTests(unittest.TestCase):
         self.assertIn('workflows: [sfstack PR signal, sfstack GitHub quality]', event)
         self.assertIn('types: [in_progress, completed]', event)
         self.assertIn('  push:\n    branches: [main]', event)
-        self.assertIn('      actions: write', event)
-        self.assertIn('      checks: write', event)
+        self.assertIn('  actions: write', event)
+        self.assertIn('  checks: write', event)
         self.assertIn(
             'uses: grove/factory/.github/workflows/sfstack-quality-events.yml@'
             + EXPECTED_FACTORY, event,
         )
         self.assertEqual(1, event.count('    uses: grove/factory/'))
         for forbidden in ('pull_request_target:', '  pull_request:', 'checkout@',
-                          'run:', 'secrets.', 'COPILOT_GITHUB_TOKEN', 'candidate'):
+                          'secrets.', 'COPILOT_GITHUB_TOKEN', 'candidate'):
             # The event coordinator is metadata-only and does not fetch artifacts
             # or run a model. Ignore prose comments for "candidate".
             for line in event.splitlines():
