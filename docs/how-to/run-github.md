@@ -6,10 +6,12 @@ workflows, operational documentation, and recovery tests have moved there.
 
 Continue with the [factory guide](https://github.com/grove/factory/blob/main/docs/how-to/run-github.md).
 
-sfstack supplies the portable skills, schemas, recipes, and
-[versioned contract CLI](../reference/public-cli.md). It has no GitHub credentials,
-event routing, draft publisher, or check-run owner. The host installs a pinned
-distribution and invokes that public interface.
+sfstack's **portable package** supplies skills, schemas, recipes, and the
+[versioned contract CLI](../reference/public-cli.md). That package has no
+GitHub credentials, event routing, draft publisher, or check-run owner. This
+repository's thin GitHub Actions workflows only forward authenticated local
+events; the actual host runs from a pinned Factory revision and consumes the
+installed public sfstack interface.
 
 ## Initial manual sfstack-to-factory Quality pilot (historical)
 
