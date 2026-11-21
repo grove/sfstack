@@ -28,6 +28,14 @@ class PinnedFactoryCallerTests(unittest.TestCase):
             source,
         )
         self.assertIn("github.event.repository.default_branch", source)
+        # A step-level trust check must produce visible job evidence. The
+        # reusable-workflow job has no condition that could fail before jobs
+        # are materialized, and the preflight job has zero token permissions.
+        self.assertIn("  preflight:\n", source)
+        self.assertIn("permissions: {}", source)
+        self.assertIn("run: test \\"$GITHUB_REF\\" = \\"$EXPECTED_REF\\"", source)
+        self.assertIn("    needs: preflight", source)
+        self.assertNotIn("if: github.ref ==", source)
 
     def test_caller_does_not_fetch_or_run_untrusted_controller_code(self):
         source = CALLER.read_text(encoding="utf-8")

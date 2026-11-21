@@ -50,3 +50,25 @@ exercise remain separate acceptance work in
 
 Upgrades require a reviewed PR bumping the full Factory SHA in this caller;
 never switch the call to a mutable branch or `latest`.
+
+## Failed-before-jobs diagnostic (21 November 2026)
+
+The [first manual caller run #44916611652](https://github.com/grove/sfstack/actions/runs/44916611652)
+failed in about two seconds with **zero jobs**, no verification, and no Copilot
+invocation. The public Actions API exposes a generic failure conclusion but
+not the UI's precise workflow-creation error. The configured token cannot be
+judged from this run because no credential-consuming step started.
+
+No-agent diagnostic push runs confirmed that the same pinned Factory
+review workflow resolves, the nested Quality workflow resolves, and the
+full Quality controller starts jobs when invoked from a non-default branch.
+That invocation correctly **failed closed at its branch guard** before any
+candidate, model, or publication step. The diagnostic run was not a
+successful Quality assessment.
+
+This follow-up moves the caller's default-branch condition to a small
+unprivileged **preflight job** and makes the reusable call depend on its
+success, while Factory retains its own independent branch/run provenance
+checks. If server-side validation still rejects the call before jobs,
+inspect the exact red error banner on the Actions run page; do not rerun
+Copilot blindly or weaken checks and publishing permissions.
