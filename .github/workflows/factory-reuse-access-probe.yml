@@ -24,8 +24,9 @@ jobs:
       head-sha: 72ed87e077074ab500d1db809eb48b154f1fee6a
 
   remote_quality_reference:
-    # Parser-only validation: never dispatch the referenced Quality controller.
-    if: ${{ false }}
+    # Active but safe: this push runs on a NON-default branch. The controller's
+    # first and publish jobs reject it before any model, candidate or API write.
+    # It is an identity-denial probe, not a Quality assessment.
     uses: grove/factory/.github/workflows/sfstack-quality.yml@550832359160e49e0824010cbd9c7e8f84b32589
     with:
       pr-number: 37
