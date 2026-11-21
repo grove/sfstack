@@ -6,19 +6,22 @@ workflows, operational documentation, and recovery tests have moved there.
 
 Continue with the [factory guide](https://github.com/grove/factory/blob/main/docs/how-to/run-github.md).
 
-sfstack supplies the portable skills, schemas, recipes, and
-[versioned contract CLI](../reference/public-cli.md). It has no GitHub credentials,
-event routing, draft publisher, or check-run owner. The host installs a pinned
-distribution and invokes that public interface.
+sfstack's **portable package** supplies skills, schemas, recipes, and the
+[versioned contract CLI](../reference/public-cli.md). That package has no
+GitHub credentials, event routing, draft publisher, or check-run owner. This
+repository's thin GitHub Actions workflows only forward authenticated local
+events; the actual host runs from a pinned Factory revision and consumes the
+installed public sfstack interface.
 
-## Manual sfstack-to-factory Quality pilot
+## Initial manual sfstack-to-factory Quality pilot (historical)
 
-This repository intentionally does **not** copy the GitHub factory controllers
-or install automatic PR event coordination. The trusted GitHub Actions caller
+The original manual-only pilot did not copy the GitHub factory controllers
+or install automatic PR event coordination. The current automatic setup is
+shown below; the controller still lives only in Factory. The trusted GitHub Actions caller
 at [`.github/workflows/sfstack-quality.yml`](../../.github/workflows/sfstack-quality.yml)
 invokes the reusable Quality Factory from
 [`grove/factory`](https://github.com/grove/factory) at the immutable
-revision `5ed01e84f98f36f0176e6228b2f71edc0087d930`.
+revision `4078dd9b529debf78efba998cd00b18e5b81fb53`.
 
 After the caller is reviewed and merged to sfstack's default branch:
 
@@ -38,9 +41,9 @@ Factory's own code, contracts and nested Copilot review are checked out at the
 immutable called-workflow SHA; `GITHUB_TOKEN`, the candidate revision, and
 the published quality check belong to `grove/sfstack`.
 
-**Scope:** one manual Quality assessment, not automatic PR events, base-push
-invalidation, interrupted-run reconciliation, Software Factory, or a central
-cross-repository service. A normal factory `checks.json` currently runs the
+**Original pilot scope:** one manual Quality assessment, prior to automatic
+PR event support. The current setup remains caller-scoped and is not a central
+cross-repository service or Software Factory. A normal factory `checks.json` currently runs the
 candidate's Python unittest suite; a future generalized target needs a
 maintainer-reviewed project-specific verification plan. A green check alone
 does not enforce GitHub branch protection, required up-to-date CI, or an
@@ -48,7 +51,7 @@ independent human approval. Those settings and a controlled live acceptance
 exercise remain separate acceptance work in
 [factory #1](https://github.com/grove/factory/issues/1).
 
-Upgrades require a reviewed PR bumping the full Factory SHA in this caller;
+Upgrades require a reviewed PR bumping the same full Factory SHA in both callers;
 never switch the call to a mutable branch or `latest`.
 
 ## Failed-before-jobs diagnostic (21 November 2026)
@@ -111,7 +114,7 @@ reviewer attempted to read `.github/workflows/sfstack-review.md` from
 the caller's empty workspace. The exact-head `sfstack quality` check
 was correctly published as **failure**.
 
-The new pinned Factory revision, `5ed01e84f98f36f0176e6228b2f71edc0087d930`, embeds the
+The new pinned Factory revision, `4078dd9b529debf78efba998cd00b18e5b81fb53`, embeds the
 author-reviewed instructions in the compiled gh-aw lock file and checks
 out the Factory controller at its called workflow SHA rather than the
 caller main SHA. This pin must be reviewed and merged **after**
@@ -124,3 +127,64 @@ published check, verified exact head and full review output. Do not
 merge PR #37 merely to exercise Quality, do not reuse a failed run as
 positive evidence, and keep remaining recovery and merge-rule
 acceptance open.
+
+## Automatic PR Quality using reusable Factory workflows
+
+**Current implementation:** Three small Actions workflows live in
+`grove/sfstack`, but the actual coordinator, verifier, Copilot reviewer,
+evidence gate and check publisher still live in [`grove/factory`](https://github.com/grove/factory).
+All called workflows are pinned to the same reviewed Factory commit,
+`4078dd9b529debf78efba998cd00b18e5b81fb53`. No `npx skills` install, local Factory code copy, or
+central cross-repository credential is needed; the reviewed Factory wheel
+already bundles the canonical sfstack skills and contracts.
+
+- `.github/workflows/sfstack-pr-signal.yml`: responds to eligible
+  same-repository `pull_request` events with **no token permissions**, no
+  checkout, and no artifact. Fork PRs are intentionally excluded.
+- `.github/workflows/sfstack-quality-events.yml`: default-branch
+  `workflow_run`/ `push` caller for Factory's authenticated coordinator.
+  Its dispatch job re-reads PR identity and checks via GitHub before a bounded
+  `workflow_dispatch` of Quality. The underlying Factory code is loaded
+  from the pinned **callee** SHA; the target retains its own GitHub run,
+  token, check IDs, and evidence. On a push to `main`, stale successful
+  assessments are invalidated **without** triggering another Copilot run;
+  completion events reconcile abandoned checks as failures.
+- `.github/workflows/sfstack-quality.yml`: accepts both operator
+  dispatches and coordinator-generated expected head, base, and request IDs.
+  It forwards the numeric PR number through `fromJSON` (required by
+  GitHub's runner behavior). The repository's `COPILOT_GITHUB_TOKEN` is
+  passed **only** to this Quality execution path.
+
+The two workflows named `sfstack PR signal` and `sfstack GitHub quality`
+must keep those exact names in the coordinator's `workflow_run` event
+filter. The coordinator must also retain the exact filenames so its API
+provenance checks cannot be bypassed by a malicious event or artifact.
+Only its dispatch job has `actions: write`; the base invalidator and
+run reconciler have `actions: read` and `checks: write`.
+
+**Costs and safeguards:** a newly opened, synchronized, reopened, edited,
+or ready-for-review PR can now incur Copilot usage automatically. Unchanged
+already-successful head/base/intent is deduplicated, and a `main` push
+does not fan out new model assessments. A base push only revokes stale
+clearance; a fresh head event or manual invocation is needed for reassessment.
+This path cannot merge, approve, or deploy PRs. Ordinary Actions runners
+are not a hostile-code sandbox, so do not invite untrusted contributors to
+create same-repository branches with executable verification code.
+
+### After the paired PRs are merged
+
+To accept the automatic path, keep the safe
+[draft PR #37](https://github.com/grove/sfstack/pull/37) open. Push one
+harmless new documentation commit to that PR branch; observe the sequence
+`sfstack PR signal` → `sfstack quality events` →
+`sfstack GitHub quality`, and confirm the `sfstack quality` check is
+attached to the **new** PR head. A new default-branch push should revoke
+prior passing clearance without starting an AI review. Retain actual
+run and check links in [factory acceptance #1](https://github.com/grove/factory/issues/1).
+A live end-to-end automatic result cannot be claimed from CI alone.
+
+To **enforce** Quality as a merge gate, configure an up-to-date required
+`sfstack quality` GitHub Actions check, normal CI, and independent human
+approval in branch rules. Neither PR changes the repository's rulesets.
+Automatic signal/dispatch is not evidence that failure or stale checks
+prevent merging unless those rules are enabled.

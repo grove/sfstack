@@ -30,7 +30,7 @@ Factory and Quality Factory are maintained in
 ## Start here
 
 - **Start a local quality run:** [Initialize, inspect, and resume](docs/how-to/run-local.md) with one CLI.
-- **Assess a GitHub PR:** [Use the manual, SHA-pinned Factory Quality caller](docs/how-to/run-github.md) with deterministic verification, Copilot review, retained evidence, and a quality gate.
+- **Assess a GitHub PR:** [Use automatic, SHA-pinned Factory Quality](docs/how-to/run-github.md) for same-repository PRs, with manual dispatch and retained evidence as a fallback.
 - **Build from a GitHub issue:** [Run Software Factory](docs/how-to/run-software-factory.md) to implement one scoped work item, verify it, and open a draft PR for Quality Factory and human review.
 - **See real test evidence:** [Execute the quality regression](evals/README.md#execute-the-quality-handoff-with-real-tests).
 - **Try one skill:** [Create an outcome brief with your agent](docs/tutorials/first-skill.md).

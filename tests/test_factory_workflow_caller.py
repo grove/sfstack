@@ -5,11 +5,11 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CALLER = ROOT / ".github/workflows/sfstack-quality.yml"
-EXPECTED_FACTORY = "5ed01e84f98f36f0176e6228b2f71edc0087d930"
+EXPECTED_FACTORY = "4078dd9b529debf78efba998cd00b18e5b81fb53"
 
 
 class PinnedFactoryCallerTests(unittest.TestCase):
-    def test_manual_only_source_uses_exact_factory_sha(self):
+    def test_quality_entrypoint_uses_exact_factory_sha(self):
         source = CALLER.read_text(encoding="utf-8")
         self.assertIn("  workflow_dispatch:\n", source)
         self.assertNotRegex(source, r"(?m)^\s+(?:pull_request_target|pull_request|push|schedule):")
@@ -24,7 +24,7 @@ class PinnedFactoryCallerTests(unittest.TestCase):
         self.assertNotIn("@main", selected_uses[0])
         self.assertNotIn("@latest", selected_uses[0])
         self.assertIn(
-            "run-name: \"sfstack quality / PR #$" + "{{ inputs.pr-number }} / request manual\"",
+            "run-name: \"sfstack quality / PR #$" + "{{ inputs.pr-number }} / request $" + "{{ inputs.request-id || 'manual' }}\"",
             source,
         )
         self.assertIn("github.event.repository.default_branch", source)
@@ -40,6 +40,63 @@ class PinnedFactoryCallerTests(unittest.TestCase):
         self.assertIn("      pr-number: $" + "{{ fromJSON(inputs.pr-number) }}", source)
         self.assertNotIn("      pr-number: $" + "{{ inputs.pr-number }}", source)
         self.assertNotIn("if: github.ref ==", source)
+
+    def test_automatic_dispatch_handoff_preserves_exact_run_identity(self):
+        source = CALLER.read_text(encoding="utf-8")
+        self.assertIn('name: sfstack GitHub quality\n', source)
+        self.assertIn('  workflow_dispatch:\n', source)
+        for key in ('expected-head', 'expected-base', 'request-id'):
+            self.assertIn('      ' + key + ':\n', source)
+            self.assertIn('      ' + key + ': $' + '{{ inputs.' + key + ' }}', source)
+        self.assertIn("inputs.request-id || 'manual'", source)
+        self.assertIn("      pr-number: $" + "{{ fromJSON(inputs.pr-number) }}", source)
+        # The Quality caller alone holds the Copilot secret and never directly
+        # executes an untrusted PR event.
+        self.assertNotIn("  pull_request:", source)
+        self.assertNotIn("  workflow_run:", source)
+
+    def test_token_free_same_repository_signal_and_pinned_coordinator(self):
+        signal = (ROOT / ".github/workflows/sfstack-pr-signal.yml").read_text()
+        event = (ROOT / ".github/workflows/sfstack-quality-events.yml").read_text()
+        self.assertIn('name: sfstack PR signal\n', signal)
+        self.assertIn('  pull_request:\n', signal)
+        self.assertIn('types: [opened, reopened, synchronize, edited, ready_for_review]', signal)
+        self.assertIn('permissions: {}', signal)
+        self.assertIn('github.event.pull_request.head.repo.full_name == github.repository', signal)
+        self.assertIn('github.event.pull_request.base.ref == github.event.repository.default_branch', signal)
+        for forbidden in ('pull_request_target:', 'actions/checkout@', 'secrets.',
+                          'github.token', 'workflow_dispatch:', 'uses:'):
+            self.assertNotIn(forbidden, signal)
+        self.assertIn('name: sfstack quality events\n', event)
+        self.assertIn('workflows: [sfstack PR signal, sfstack GitHub quality]', event)
+        self.assertIn('types: [in_progress, completed]', event)
+        self.assertIn('  push:\n    branches: [main]', event)
+        self.assertIn('  actions: write', event)
+        self.assertIn('  checks: write', event)
+        self.assertIn(
+            'uses: grove/factory/.github/workflows/sfstack-quality-events.yml@'
+            + EXPECTED_FACTORY, event,
+        )
+        self.assertEqual(1, event.count('    uses: grove/factory/'))
+        for forbidden in ('pull_request_target:', '  pull_request:', 'checkout@',
+                          'secrets.', 'COPILOT_GITHUB_TOKEN', 'candidate'):
+            # The event coordinator is metadata-only and does not fetch artifacts
+            # or run a model. Ignore prose comments for "candidate".
+            for line in event.splitlines():
+                if not line.strip().startswith('#'):
+                    self.assertNotIn(forbidden, line)
+        self.assertNotIn('@main', event.split('uses: grove/factory/',1)[1].splitlines()[0])
+
+    def test_manual_and_automatic_callers_pin_the_same_factory_source(self):
+        signal = (ROOT / ".github/workflows/sfstack-pr-signal.yml").read_text()
+        event = (ROOT / ".github/workflows/sfstack-quality-events.yml").read_text()
+        quality = CALLER.read_text()
+        self.assertEqual(1, quality.count('@' + EXPECTED_FACTORY))
+        self.assertEqual(1, event.count('@' + EXPECTED_FACTORY))
+        self.assertRegex(EXPECTED_FACTORY, r'^[a-f0-9]{40}$')
+        self.assertIn('name: sfstack GitHub quality\n', quality)
+        self.assertNotIn('COPILOT_GITHUB_TOKEN', signal + event)
+        self.assertNotIn('pull_request_target', quality + signal + event)
 
     def test_caller_does_not_fetch_or_run_untrusted_controller_code(self):
         source = CALLER.read_text(encoding="utf-8")
