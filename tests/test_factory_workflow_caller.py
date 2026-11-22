@@ -5,7 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CALLER = ROOT / ".github/workflows/sfstack-quality.yml"
-EXPECTED_FACTORY = "4078dd9b529debf78efba998cd00b18e5b81fb53"
+EXPECTED_FACTORY = "2724639ff042459a9591181f8c2b1ef1b413f10b"
 
 
 class PinnedFactoryCallerTests(unittest.TestCase):
@@ -60,7 +60,9 @@ class PinnedFactoryCallerTests(unittest.TestCase):
         event = (ROOT / ".github/workflows/sfstack-quality-events.yml").read_text()
         self.assertIn('name: sfstack PR signal\n', signal)
         self.assertIn('  pull_request:\n', signal)
-        self.assertIn('types: [opened, reopened, synchronize, edited, ready_for_review]', signal)
+        self.assertIn('types: [opened, reopened, synchronize, edited]', signal)
+        self.assertNotIn('ready_for_review', signal)
+        # Readiness is not a change in pinned head, base, or acceptance intent.
         self.assertIn('permissions: {}', signal)
         self.assertIn('github.event.pull_request.head.repo.full_name == github.repository', signal)
         self.assertIn('github.event.pull_request.base.ref == github.event.repository.default_branch', signal)

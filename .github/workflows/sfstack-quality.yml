@@ -51,7 +51,7 @@ jobs:
     name: Run pinned factory Quality
     needs: preflight
     # Exact Factory commit, shared with the event coordinator; never @main/@latest.
-    uses: grove/factory/.github/workflows/sfstack-quality.yml@4078dd9b529debf78efba998cd00b18e5b81fb53
+    uses: grove/factory/.github/workflows/sfstack-quality.yml@2724639ff042459a9591181f8c2b1ef1b413f10b
     with:
       # workflow_dispatch may pass a number as a string to workflow_call;
       # fromJSON preserves the declared numeric type (actions/runner#2848).
