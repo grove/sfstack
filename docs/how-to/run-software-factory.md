@@ -51,6 +51,20 @@ Factory for its exact head. No agent can approve or merge a PR.
   requires a separately inspected live pilot with retained negative
   evidence in [factory #1](https://github.com/grove/factory/issues/1).
 
+### Troubleshooting the first live run
+
+| Symptom | Likely cause | Safe recovery action |
+| --- | --- | --- |
+| The build step fails at authentication, or the Copilot step reports a missing or unauthorized token. | The `COPILOT_GITHUB_TOKEN` repository secret is missing, empty, expired, or lacks Copilot access. It is forwarded only to the trusted Factory workflow. | Have a maintainer re-create the secret in **Settings → Secrets and variables → Actions** for `grove/sfstack`, then start a new run. Never paste the token into an issue, input, log, or comment, and do not echo it to debug. |
+| The caller rejects the inputs before any build starts. | `allowed-paths` is not a JSON array of 1–8 exact file paths, or `acceptance-criteria` is not a JSON array of strings. Globs, directories, and files outside the supported scope are not accepted. | Re-dispatch with, for example, `["docs/how-to/run-software-factory.md"]` for `allowed-paths` and `["First criterion","Second criterion"]` for `acceptance-criteria`. Do not widen the file list beyond what the issue needs. |
+| The run stops because `main` or the issue no longer matches the pinned inputs. | The run is pinned to a base commit and issue content. Advancing `main` or editing the issue (title, body, or state) invalidates that pin. | Do not retry the old run. Review the new `main` and issue text, then start a new run so it pins fresh inputs. Retry only for transient infrastructure failures where `main` and the issue are unchanged. |
+| Verification passed, but no draft PR appears and the publish step reports it cannot create a pull request. | **Allow GitHub Actions to create and approve pull requests** is disabled. It is a repository setting under **Settings → Actions → General → Workflow permissions**, and an organization policy can override it. | A maintainer enables the setting for `grove/sfstack` only, then starts a new run. This grants no approval or merge authority: the publisher only creates drafts, and quality gates and human review still apply. |
+
+Recovery never involves bypassing a quality gate, granting broader write
+authority, or merging or approving automatically. See
+[Prerequisites and live pilot boundaries](#prerequisites-and-live-pilot-boundaries)
+for the supported setup.
+
 Do not silently broaden the file policy, start paid model work merely to
 test whether the workflow is visible in Actions, or merge an AI-produced
 draft without human review.
