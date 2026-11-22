@@ -14,7 +14,10 @@ class PinnedSoftwareCallerTests(unittest.TestCase):
         self.assertIn("name: sfstack GitHub software\n", source)
         self.assertIn('run-name: "sfstack software / issue #$', source)
         self.assertIn("  workflow_dispatch:\n", source)
-        self.assertNotRegex(source, r"(?m)^\s+(?:pull_request|pull_request_target|push|schedule|issues):")
+        # Inspect only event keys. "issues: read" is the publisher's
+        # *read permission*, not an issue event trigger.
+        events = source.split("\non:\n", 1)[1].split("\nrun-name:", 1)[0]
+        self.assertNotRegex(events, r"(?m)^\s+(?:pull_request|pull_request_target|push|schedule|issues):")
         self.assertRegex(EXPECTED_FACTORY, r"^[0-9a-f]{40}$")
         self.assertIn("uses: grove/factory/.github/workflows/sfstack-software.yml@" + EXPECTED_FACTORY, source)
         self.assertEqual(1, source.count("    uses: grove/factory/"))
