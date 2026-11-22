@@ -1,0 +1,70 @@
+name: sfstack GitHub software
+
+# Explicit maintainer-only issue invocation, never PR/issue event automation.
+# Source of trusted controller code is a reviewed immutable Factory revision.
+# The caller repository owns its own issue, candidate, workflow token, draft PR
+# and Quality check. No agent or candidate job has publication credentials.
+on:
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: Open sfstack issue to implement, selected by a maintainer
+        required: true
+        type: number
+      allowed-paths:
+        description: 'JSON list of exact permitted files, e.g. ["docs/example.md"]'
+        required: true
+        type: string
+      acceptance-criteria:
+        description: 'JSON list of explicit observable required outcomes'
+        required: true
+        type: string
+      repair-mode:
+        description: change or defect
+        required: true
+        type: choice
+        default: change
+        options: [change, defect]
+      regression-file:
+        description: Defect only, an exact NEW tests/test_*.py in allowed paths
+        required: false
+        type: string
+
+run-name: "sfstack software / issue #${{ inputs.issue-number }}"
+
+# Maximum permissions available to the pinned callee. That callee narrows
+# read-only admission/agent/verification jobs independently; only its final
+# publisher can create a draft PR/check and dispatch Quality.
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+  actions: write
+  checks: write
+
+jobs:
+  preflight:
+    name: Confirm a trusted default-branch operator dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Reject nondefault caller refs before exposing the Factory
+        env:
+          EXPECTED_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: test "$GITHUB_REF" = "$EXPECTED_REF"
+
+  software:
+    name: Run pinned issue-to-draft Software Factory
+    needs: preflight
+    uses: grove/factory/.github/workflows/sfstack-software.yml@9c6388425058acf1eb46e1fb40408205c8f38268
+    with:
+      # A workflow_dispatch numeric input may arrive stringified in the
+      # reusable-call context. Preserve its declared number type.
+      issue-number: ${{ fromJSON(inputs.issue-number) }}
+      allowed-paths: ${{ inputs.allowed-paths }}
+      acceptance-criteria: ${{ inputs.acceptance-criteria }}
+      repair-mode: ${{ inputs.repair-mode }}
+      regression-file: ${{ inputs.regression-file }}
+    secrets:
+      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
