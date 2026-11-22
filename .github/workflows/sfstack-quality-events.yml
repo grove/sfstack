@@ -21,4 +21,4 @@ permissions:
 jobs:
   coordinate:
     name: Apply authenticated Factory Quality event logic
-    uses: grove/factory/.github/workflows/sfstack-quality-events.yml@4078dd9b529debf78efba998cd00b18e5b81fb53
+    uses: grove/factory/.github/workflows/sfstack-quality-events.yml@73834a29e39365ad40b2f994ad9d482a10b99c2d
