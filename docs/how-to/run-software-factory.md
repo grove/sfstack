@@ -17,7 +17,7 @@ The trusted Software Factory implementation now lives in
 [`grove/factory`](https://github.com/grove/factory). This repository's
 thin [`.github/workflows/sfstack-software.yml`](../../.github/workflows/sfstack-software.yml)
 calls it at the immutable, reviewed Factory commit
-`9c6388425058acf1eb46e1fb40408205c8f38268`. It is a **manual-only** `workflow_dispatch`
+`cb4b0b07b1d273af03e9fe860b7cf9113b6064d9`. It is a **manual-only** `workflow_dispatch`
 entrypoint: opening, editing, or labeling an issue cannot autonomously
 start a build, and candidates cannot choose their own controller source.
 
@@ -38,8 +38,9 @@ Factory for its exact head. No agent can approve or merge a PR.
   Allow GitHub Actions to create and approve pull requests** for
   `grove/sfstack`. The workflow itself *only creates drafts* and
   requests Quality; it does not call the approval/merge APIs.
-- Keep the existing protected `main`, required current CI, GitHub Actions
-  `sfstack quality` check, and independent human approval.
+- Keep the existing protected `main`, required current CI and the GitHub Actions
+  `sfstack quality` check. The repository's solo-maintainer policy requires
+  **zero external approvals**; the maintainer still inspects evidence before merging.
 - Begin only with a **maintainer-approved, harmless, bounded issue** and
   explicitly selected files. The package's Python test suite and independent
   verifier are the initial default checks; no hostile same-repo candidate

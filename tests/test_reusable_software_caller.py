@@ -5,7 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOFTWARE = ROOT / ".github/workflows/sfstack-software.yml"
-EXPECTED_FACTORY = "9c6388425058acf1eb46e1fb40408205c8f38268"
+EXPECTED_FACTORY = "cb4b0b07b1d273af03e9fe860b7cf9113b6064d9"
 
 
 class PinnedSoftwareCallerTests(unittest.TestCase):

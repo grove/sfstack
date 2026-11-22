@@ -57,7 +57,7 @@ jobs:
   software:
     name: Run pinned issue-to-draft Software Factory
     needs: preflight
-    uses: grove/factory/.github/workflows/sfstack-software.yml@9c6388425058acf1eb46e1fb40408205c8f38268
+    uses: grove/factory/.github/workflows/sfstack-software.yml@cb4b0b07b1d273af03e9fe860b7cf9113b6064d9
     with:
       # A workflow_dispatch numeric input may arrive stringified in the
       # reusable-call context. Preserve its declared number type.
