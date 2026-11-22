@@ -1,0 +1,30 @@
+name: Factory Software reusable call graph probe (no agent)
+
+# Disposable, off-default-branch parse/resolution diagnostic.
+# The Factory prepare job MUST fail its default-branch guard before any
+# agent, candidate verification, write-authorized publisher, or paid work.
+on:
+  push:
+    branches: [diagnostic/no-agent-software-graph-20261122]
+
+# Upper bound required by the reusable publisher; the callee narrows
+# permissions by job. Admission fails at its FIRST step on this branch.
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+  actions: write
+  checks: write
+
+jobs:
+  resolve:
+    name: Resolve Factory Software and nested self-reference without an agent
+    uses: grove/factory/.github/workflows/sfstack-software.yml@cb4b0b07b1d273af03e9fe860b7cf9113b6064d9
+    with:
+      issue-number: 99999999
+      allowed-paths: '["README.md"]'
+      acceptance-criteria: '["Resolution probe only; do not create any artifact"]'
+      repair-mode: change
+      regression-file: ""
+    secrets:
+      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
