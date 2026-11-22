@@ -3,9 +3,11 @@ name: sfstack PR signal
 # Untrusted PR changes only produce a token-free signal; the default-branch
 # event coordinator reads the authoritative PR/run identity through GitHub.
 # Fork PRs and changes targeting other branches do not trigger Factory.
+# Draft -> ready alone leaves the assessed head, base and acceptance intent unchanged.
+# Opening, reopening, syncing or editing still requests a fresh assessment.
 on:
   pull_request:
-    types: [opened, reopened, synchronize, edited, ready_for_review]
+    types: [opened, reopened, synchronize, edited]
 
 permissions: {}
 
