@@ -188,3 +188,16 @@ To **enforce** Quality as a merge gate, configure an up-to-date required
 approval in branch rules. Neither PR changes the repository's rulesets.
 Automatic signal/dispatch is not evidence that failure or stale checks
 prevent merging unless those rules are enabled.
+
+## Software Factory: explicit issue dispatch, not PR event automation
+
+The automatic Quality coordinator above does **not** run Software Factory
+for arbitrary new issues. The bounded Software caller
+[`.github/workflows/sfstack-software.yml`](../../.github/workflows/sfstack-software.yml)
+is manual-only and pins a separate reviewed Factory commit. It admits only
+a maintainer-selected issue, exact paths and acceptance criteria. A passing
+Software verification may create a draft PR and then hand the exact head to
+the existing automatic Quality gate; the user must still obtain normal CI,
+current Quality and independent human approval before merging. See
+[the Software Factory guide](run-software-factory.md#reusable-issue-to-draft-software-factory-manual-caller)
+for prerequisites, model cost and live-acceptance limitations.
