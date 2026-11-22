@@ -20,8 +20,10 @@ import unittest
 WORKER_ENV_NAMES = frozenset({
     "PATH", "HOME", "USERPROFILE", "LANG", "LANGUAGE", "TZ", "TMPDIR", "TEMP", "TMP",
     "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "VIRTUAL_ENV", "LD_LIBRARY_PATH",
+    # Standard POSIX locale categories only; arbitrary LC_* names are not forwarded.
+    "LC_ALL", "LC_COLLATE", "LC_CTYPE", "LC_MESSAGES", "LC_MONETARY", "LC_NUMERIC", "LC_TIME",
+    "LC_ADDRESS", "LC_IDENTIFICATION", "LC_MEASUREMENT", "LC_NAME", "LC_PAPER", "LC_TELEPHONE",
 })
-WORKER_ENV_PREFIXES = ("LC_",)
 # Explicit interpreter text/encoding settings only; no PYTHON* prefix, PYTHONPATH or PYTHONSTARTUP.
 WORKER_PYTHON_ENV_NAMES = frozenset({"PYTHONIOENCODING", "PYTHONUTF8"})
 
@@ -29,8 +31,7 @@ WORKER_PYTHON_ENV_NAMES = frozenset({"PYTHONIOENCODING", "PYTHONUTF8"})
 def worker_environment():
     """Pass candidate tests only non-credential process basics, never the host's secrets."""
     env = {name: value for name, value in os.environ.items()
-           if name in WORKER_ENV_NAMES or name in WORKER_PYTHON_ENV_NAMES
-           or name.startswith(WORKER_ENV_PREFIXES)}
+           if name in WORKER_ENV_NAMES or name in WORKER_PYTHON_ENV_NAMES}
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     return env
 
