@@ -102,10 +102,10 @@ class PinnedFactoryCallerTests(unittest.TestCase):
 
     def test_required_quality_pr_check_is_eligible_and_read_only(self):
         source = (ROOT / ".github/workflows/sfstack-quality-required.yml").read_text()
-        self.assertIn("name: sfstack quality required\\n", source)
-        self.assertIn("  pull_request:\\n", source)
+        self.assertIn("name: sfstack quality required\n", source)
+        self.assertIn("  pull_request:\n", source)
         self.assertIn("types: [opened, reopened, synchronize, edited]", source)
-        self.assertIn("name: sfstack quality\\n", source)
+        self.assertIn("name: sfstack quality\n", source)
         self.assertIn("checks: read", source)
         self.assertIn("actions: read", source)
         self.assertIn("pull-requests: read", source)
