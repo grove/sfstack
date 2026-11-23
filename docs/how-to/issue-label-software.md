@@ -85,7 +85,7 @@ Merge the [Factory implementation PR](https://github.com/grove/factory/pull/14)
 the repository can create **draft PRs** with Actions `GITHUB_TOKEN`,
 and that `COPILOT_GITHUB_TOKEN` remains configured for the underlying
 bounded builder. No production workflow starts from opening or editing an
-issue alone, and `factory:plan` is no-model.
+issue alone; `factory:plan` starts only on a separately applied human label and consumes Copilot usage.
 
 Keep `grove/factory` and `grove/sfstack` protected on main.
 No branch-protection, GitHub Actions setting, or merge policy is changed by
