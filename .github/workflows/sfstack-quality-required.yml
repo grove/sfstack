@@ -1,0 +1,38 @@
+name: sfstack quality required
+
+# Native PR job satisfies GitHub's required check while independently
+# authenticating the separately published, SHA-pinned Quality assessment.
+# Only the reviewed Factory gate is executed; PR candidate code never runs.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  verify:
+    name: sfstack quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: grove/factory
+          ref: d2bb9be1fe9f472b5aaae99a33ad00810df6adfb
+          path: trusted
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Authenticate current independent Quality without a new AI review
+        working-directory: trusted
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python -m integrations.github.required_quality_gate
+          --event "$GITHUB_EVENT_PATH" --timeout-seconds 1800
