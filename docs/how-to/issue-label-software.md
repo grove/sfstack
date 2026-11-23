@@ -82,6 +82,27 @@ Documentation links like this one may point to the current guide, but
 execution and controller workflows must still use immutable, reviewed commit
 SHAs.
 
+### Verify a direct run
+
+After a writer applies only `factory:run`, check the following without
+spending anything further:
+
+1. Open the issue and find the bot-authored one-shot **direct run claim**.
+   Confirm it lists the exact file scope and acceptance criteria you
+   intended, then follow its linked GitHub Actions run. The claim is only a
+   scope and attempt record. It is not a passing test and not merge approval.
+2. In that run, the separate `plan` and `publish_plan` jobs are
+   **intentionally skipped** for a direct `factory:run`, while the authorized
+   `software` job should run. No AI-assisted plan comment is expected in
+   direct mode. The skips say nothing about whether the build succeeded or
+   failed; judge the outcome from the `software` job.
+3. A successful build proceeds through independently checked evidence to a
+   **draft PR**. Quality and CI then run separately on that PR, and merging
+   remains a human-only decision.
+4. If the `software` job fails or no draft PR appears, inspect the linked run
+   and the retained one-shot claim. Do **not** remove and reapply
+   `factory:run`: the claim permanently prevents another paid attempt.
+
 ### What a useful AI plan looks like
 
 Suppose an issue's criterion is "empty input is rejected". A plan that only
