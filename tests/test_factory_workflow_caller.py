@@ -100,6 +100,25 @@ class PinnedFactoryCallerTests(unittest.TestCase):
         self.assertNotIn('COPILOT_GITHUB_TOKEN', signal + event)
         self.assertNotIn('pull_request_target', quality + signal + event)
 
+    def test_required_quality_pr_check_is_eligible_and_read_only(self):
+        source = (ROOT / ".github/workflows/sfstack-quality-required.yml").read_text()
+        self.assertIn("name: sfstack quality required\\n", source)
+        self.assertIn("  pull_request:\\n", source)
+        self.assertIn("types: [opened, reopened, synchronize, edited]", source)
+        self.assertIn("name: sfstack quality\\n", source)
+        self.assertIn("checks: read", source)
+        self.assertIn("actions: read", source)
+        self.assertIn("pull-requests: read", source)
+        self.assertIn("permissions: {}", source)
+        self.assertIn("repository: grove/factory", source)
+        self.assertIn("ref: d2bb9be1fe9f472b5aaae99a33ad00810df6adfb", source)
+        self.assertIn("persist-credentials: false", source)
+        self.assertIn("working-directory: trusted", source)
+        self.assertIn("required_quality_gate", source)
+        for forbidden in ("pull_request_target:", "actions: write", "checks: write",
+                          "contents: write", "COPILOT_GITHUB_TOKEN", "workflow_dispatch:"):
+            self.assertNotIn(forbidden, source)
+
     def test_caller_does_not_fetch_or_run_untrusted_controller_code(self):
         source = CALLER.read_text(encoding="utf-8")
         # No token-altering shell step, local runtime checkout or arbitrary
