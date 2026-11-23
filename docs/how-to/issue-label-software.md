@@ -4,11 +4,21 @@ You no longer need the long `gh workflow run` command or the five-field
 GitHub Actions form for a normal work item. The established manual workflow
 remains available when you need an explicit operator recovery.
 
-**Once after deployment:** in your repository's **Issues → Labels**, create
-labels `factory:plan` and `factory:run` with these exact spellings.
-This label handler runs only after the reviewed, SHA-pinned
-[`sfstack-issue-label.yml`](../../.github/workflows/sfstack-issue-label.yml)
-has been merged into `main`.
+## Prerequisites for current use
+
+- The repository has labels named exactly `factory:plan` and `factory:run`.
+- The reviewed, SHA-pinned
+  [`sfstack-issue-label.yml`](../../.github/workflows/sfstack-issue-label.yml)
+  caller is already merged into the default branch (`main`). A caller that is
+  only on a feature branch does not handle labels.
+- Copilot entitlement is available and the `COPILOT_GITHUB_TOKEN` secret is
+  configured for the planning and build jobs.
+- Actions `GITHUB_TOKEN` may create **draft PRs**, and the default branch stays
+  protected: normal review, branch-protection and Quality requirements still
+  apply. Using this feature never requires broader permissions or skipping
+  review.
+
+No production workflow starts from opening or editing an issue alone.
 
 ## Use it
 
@@ -53,7 +63,21 @@ the deliberate final `factory:run` choice. The first comment is the deterministi
 The second comment must be a bounded, actual AI-generated implementation
 strategy before a human writer may authorize a paid build. The model's
 proposal is advice only; it cannot change the original authorized scope. Full authority boundaries and operational details are in
-[the Factory's label-based Software guide](https://github.com/grove/factory/blob/e279c0eb3ce18a529cf7941492caa07ca0c03882/docs/how-to/issue-label-software-factory.md).
+[the Factory's current AI-assisted label-based Software guide](https://github.com/grove/factory/blob/main/docs/how-to/issue-label-software-factory.md).
+Documentation links like this one may point to the current guide, but
+execution and controller workflows must still use immutable, reviewed commit
+SHAs.
+
+### What a useful AI plan looks like
+
+Suppose an issue's criterion is "empty input is rejected". A plan that only
+repeats it ("make empty input rejected; add a test") adds nothing. A useful
+plan is specific per file, for example: "In `examples/parser.py`, make
+`parse()` raise `ValueError` when the input is empty, because it currently
+returns `None`; in `tests/test_parser.py`, propose a test that calls
+`parse("")` and expects `ValueError`." Proposed test methods are advice, not
+executed evidence: only the independent host verification after `factory:run`
+produces results.
 
 ## Troubleshooting a label that did not start work
 
@@ -77,16 +101,3 @@ change, the result is published only as a draft PR after independent
 verification and Quality, and merging remains a human decision. A future paid
 build is authorized only when a human reviews the plan and deliberately applies
 `factory:run`.
-
-## Activation order and prerequisites
-
-Merge the [Factory implementation PR](https://github.com/grove/factory/pull/14)
-**first**, then the thin, exact-SHA-pinned sfstack caller PR. Confirm that
-the repository can create **draft PRs** with Actions `GITHUB_TOKEN`,
-and that `COPILOT_GITHUB_TOKEN` remains configured for the underlying
-bounded builder. No production workflow starts from opening or editing an
-issue alone; `factory:plan` starts only on a separately applied human label and consumes Copilot usage.
-
-Keep `grove/factory` and `grove/sfstack` protected on main.
-No branch-protection, GitHub Actions setting, or merge policy is changed by
-adding this feature.
