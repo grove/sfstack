@@ -5,7 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/sfstack-issue-label.yml"
-FACTORY = "8164f2e5a6c122e81e2fac43bc31f5933c8012fa"
+FACTORY = "521a7285dc9350c0be546cfd03ab4d6e3f2693f4"
 
 
 class LabelCallerTests(unittest.TestCase):
