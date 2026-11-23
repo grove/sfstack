@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
 import unittest
@@ -139,6 +140,20 @@ def worker(candidate, tests, output):
     }, indent=2) + "\n", encoding="utf-8")
 
 
+def terminate_worker(process):
+    """Kill the owned worker process group (POSIX) or worker, then reap the worker."""
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGKILL)
+        else:
+            process.kill()
+    except ProcessLookupError:
+        pass
+    except OSError:
+        process.kill()
+    process.wait()
+
+
 def verify(invocation_path, output_path):
     invocation, output = load_json(invocation_path), Path(output_path)
     if invocation["skill"] != "sf-verify-change" or invocation["output_type"] != "verification-report":
@@ -165,17 +180,21 @@ def verify(invocation_path, output_path):
     counts = logs / "counts.json"
     timed_out = False
     with (logs / "stdout.txt").open("wb") as stdout, (logs / "stderr.txt").open("wb") as stderr:
+        # On POSIX the worker leads its own process group so timeout cleanup reaches
+        # descendants it spawned; this is best-effort cleanup, not a sandbox.
+        process = subprocess.Popen(
+            [sys.executable, "-B", str(Path(__file__).resolve()), "--worker",
+             str(candidate), str(tests), str(counts)],
+            cwd=candidate, stdout=stdout, stderr=stderr,
+            env=worker_environment(), start_new_session=os.name == "posix",
+        )
         try:
-            completed = subprocess.run(
-                [sys.executable, "-B", str(Path(__file__).resolve()), "--worker",
-                 str(candidate), str(tests), str(counts)],
-                cwd=candidate, stdout=stdout, stderr=stderr,
-                timeout=timeout, check=False,
-                env=worker_environment(),
-            )
+            returncode = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
-            completed = None
+            returncode = None
+            terminate_worker(process)
+    completed = None if timed_out else subprocess.CompletedProcess(process.args, returncode)
     missing_runner = timed_out or completed.returncode != 0 or not counts.is_file()
     data = (load_json(counts) if not missing_runner else
             {"executed": [], "failed": [], "skipped": [], "expected_failures": [],
