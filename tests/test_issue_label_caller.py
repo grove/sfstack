@@ -5,7 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/sfstack-issue-label.yml"
-FACTORY = "e279c0eb3ce18a529cf7941492caa07ca0c03882"
+FACTORY = "249ddd58e2e42fe1ad8b731c8347515892b5b3bb"
 
 
 class LabelCallerTests(unittest.TestCase):
@@ -29,15 +29,37 @@ class LabelCallerTests(unittest.TestCase):
         self.assertIn("repository: grove/factory", text)
         self.assertIn("          ref: " + FACTORY, text)
         self.assertIn("uses: grove/factory/.github/workflows/sfstack-software.yml@" + FACTORY, text)
-        self.assertEqual(2, text.count(FACTORY))
+        self.assertEqual(3, text.count(FACTORY))
         self.assertNotIn("@main", text)
         self.assertNotIn("@latest", text)
         self.assertIn("persist-credentials: false", text)
         self.assertIn("bootstrap_contracts.py", text)
 
+    def test_paid_model_and_write_publisher_are_isolated(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        plan = text.split("\n  plan:\n", 1)[1].split("\n  publish_plan:\n", 1)[0]
+        publish = text.split("\n  publish_plan:\n", 1)[1].split("\n  software:\n", 1)[0]
+        self.assertIn("name: Generate actionable Copilot implementation proposal", plan)
+        self.assertIn("node-version: '24'", plan)
+        self.assertIn("npm install -g @github/copilot@1.0.114", plan)
+        self.assertIn("--no-ask-user", plan)
+        self.assertIn("--available-tools=view --deny-tool=write", plan)
+        self.assertIn("COPILOT_GITHUB_TOKEN: $", plan)
+        for disallowed in ("issues: write", "pull-requests: write", "actions: write",
+                           "checks: write", "gh pr create", "github.api"):
+            self.assertNotIn(disallowed, plan)
+        self.assertIn("name: Revalidate exact issue and publish bounded", publish)
+        self.assertIn("issues: write", publish)
+        self.assertIn("--publish-ai", publish)
+        self.assertNotIn("COPILOT_GITHUB_TOKEN", publish)
+        self.assertNotIn("contents: write", publish)
+        self.assertIn("sfstack-ai-plan-proposal-", plan)
+        self.assertIn("sfstack-ai-plan-proposal-", publish)
+        self.assertIn("needs.authorize.outputs.plan_requested == 'true'", plan)
+
     def test_publisher_rights_are_not_on_label_authorizer(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        auth = text.split("\n  authorize:\n", 1)[1].split("\n  software:\n", 1)[0]
+        auth = text.split("\n  authorize:\n", 1)[1].split("\n  plan:\n", 1)[0]
         downstream = text.split("\n  software:\n", 1)[1]
         self.assertIn("permissions: {}", text)
         self.assertIn("      issues: write", auth)
