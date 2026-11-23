@@ -5,7 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/sfstack-issue-label.yml"
-FACTORY = "4fb270e2a8dd772f6db298b96b969d93699c78c9"
+FACTORY = "521a7285dc9350c0be546cfd03ab4d6e3f2693f4"
 
 
 class LabelCallerTests(unittest.TestCase):
@@ -71,6 +71,19 @@ class LabelCallerTests(unittest.TestCase):
         self.assertIn("issues: write", publish)
         self.assertNotIn("COPILOT_GITHUB_TOKEN", publish)
         self.assertNotIn("contents: write", publish)
+
+    def test_direct_run_and_optional_planner_remain_separate(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        auth = text.split("\n  authorize:\n", 1)[1].split("\n  plan:\n", 1)[0]
+        model = text.split("\n  plan:\n", 1)[1].split("\n  publish_plan:\n", 1)[0]
+        software = text.split("\n  software:\n", 1)[1]
+        self.assertIn("github.event.label.name == 'factory:run'", auth)
+        self.assertIn("if: github.event.label.name == 'factory:plan'", auth)
+        self.assertIn("needs.authorize.outputs.plan_requested == 'true'", model)
+        self.assertIn("needs.authorize.outputs.authorized == 'true'", software)
+        self.assertNotIn("COPILOT_GITHUB_TOKEN", auth)
+        self.assertNotIn("issues: write", model)
+        self.assertIn("COPILOT_GITHUB_TOKEN", software)
 
     def test_publisher_rights_are_not_on_label_authorizer(self):
         text = WORKFLOW.read_text(encoding="utf-8")

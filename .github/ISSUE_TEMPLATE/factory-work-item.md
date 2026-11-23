@@ -1,6 +1,6 @@
 ---
 name: Software Factory work item
-about: Propose a bounded implementation, preview it with factory:plan, then start it with factory:run
+about: Propose bounded work; use factory:run directly or preview with factory:plan first
 title: ""
 labels: []
 assignees: ""
@@ -22,7 +22,11 @@ replace this illustrative path with your actual file. Do not use globs.
 1. Describe one concrete, externally observable outcome.
 2. Describe how a reviewer should verify the improvement.
 
-<!-- For a genuine defect RED/GREEN repair, start the issue title with
+<!-- factory:plan is optional paid AI planning. A human writer may instead
+apply factory:run directly for one paid build; both paths require exact scope,
+normal Quality, and a human merge decision.
+
+For a genuine defect RED/GREEN repair, start the issue title with
 "defect:", list one existing examples/ implementation file and one NEW
 tests/test_*.py regression file. Add Mode: defect if the title is not
 defect:-prefixed. The labels do not bypass normal exact-path policy. -->
