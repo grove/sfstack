@@ -111,7 +111,7 @@ class PinnedFactoryCallerTests(unittest.TestCase):
         self.assertIn("pull-requests: read", source)
         self.assertIn("permissions: {}", source)
         self.assertIn("repository: grove/factory", source)
-        self.assertIn("ref: d2bb9be1fe9f472b5aaae99a33ad00810df6adfb", source)
+        self.assertIn("ref: 3982085ba70d782ae51aad03e126001002161bc5", source)
         self.assertIn("persist-credentials: false", source)
         self.assertIn("working-directory: trusted", source)
         self.assertIn("required_quality_gate", source)
