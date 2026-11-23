@@ -24,6 +24,8 @@ sfstack is a library of focused skills, explicit interfaces and evidence-based w
 
 See [operating modes](docs/explanation/operating-modes.md) and [architecture](docs/explanation/factory-design.md).
 
+<a id="a-first-working-example"></a>
+
 ## Try a local example
 
 Run a deterministic regression with real tests against a defective candidate, corrected candidate and negative test-suite cases:
@@ -58,6 +60,8 @@ Do not change source files or publish anything.
 Record unknowns and the evidence for each conclusion.
 ```
 
+<a id="what-is-included"></a>
+
 ## What belongs here?
 
 | Layer | Responsibility |
@@ -69,6 +73,8 @@ Record unknowns and the evidence for each conclusion.
 | [Factory](https://github.com/grove/factory) | Separate GitHub host: events, credentials, candidate execution, publication and checks |
 
 The portable contracts are language- and provider-neutral, but individual execution profiles have specific limits. The GitHub Factory pilot currently requires Python unittest and restricted exact files; see its [configuration](https://github.com/grove/factory/blob/main/docs/reference/configuration.md). The local adapter examples supply no hardened sandbox or production authorization system.
+
+<a id="validate-this-repository"></a>
 
 ## Maintain sfstack
 
@@ -89,11 +95,11 @@ python tools/export_skills.py --output /tmp/sfstack-export
 
 See [tooling reference](docs/reference/tooling.md), [contributing](CONTRIBUTING.md) and the [documentation index](docs/README.md). The library does not supply a tracker, merge queue or deployment service; a host must enforce permissions, isolation and persistence.
 
+<a id="design-commitments"></a>
+
+For the original design commitments, see [architecture](docs/explanation/factory-design.md) and [the original README](https://github.com/grove/sfstack/blob/bf3c743dcb2b88ef1bafa39720fff0aab35ebb02/README.md#design-commitments).
+
+<a id="license"></a>
+
 [Apache License 2.0](LICENSE).
 
-<!-- Legacy section anchors retained for existing links. -->
-<a id="a-first-working-example"></a>
-<a id="what-is-included"></a>
-<a id="validate-this-repository"></a>
-<a id="design-commitments"></a>
-<a id="license"></a>
