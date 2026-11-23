@@ -47,6 +47,28 @@ summary of the exact paths and criteria in the issue, not a separate paid AI
 planner. Full authority boundaries and operational details are in
 [the Factory's label-based Software guide](https://github.com/grove/factory/blob/e279c0eb3ce18a529cf7941492caa07ca0c03882/docs/how-to/issue-label-software-factory.md).
 
+## Troubleshooting a label that did not start work
+
+Before retrying anything, open the issue and read the bot's **plan** and
+**claim** comments, then open the matching run in the repository's **Actions**
+tab (the run for the label event, linked from or named in those comments).
+Match what you see to a row below.
+
+| Symptom | Likely explanation | Safe response |
+| --- | --- | --- |
+| No plan comment after `factory:plan` | The label was added by a bot or a user without write permission, the label was removed, the label spelling is wrong, or the planning run failed or has not finished. | Check the label's exact spelling and who added it, then check the planning run in Actions. A writer can remove and re-add `factory:plan`; this is no-model and spends nothing. |
+| The issue or `main` changed after planning | The plan is bound to the exact issue text and base SHA, so `factory:run` is rejected as stale. | Reapply `factory:plan`, review the new plan comment, and only then decide on `factory:run`. |
+| `factory:run` ignored: bot or non-writer actor, or label removed | Only a repository writer who applied the label may authorize a build, and the label must still be present when the run checks it. | Have a writer review the plan and deliberately add `factory:run` themselves. Do not work around the permission check. |
+| A claim comment already exists | A one-shot durable claim records that a paid attempt was authorized for this plan. | Do **not** remove and reapply `factory:run`: this never launches a second paid attempt for an existing claim. Inspect the recorded run instead. |
+| The paid run is still executing or has failed | The claimed attempt is in progress, or it ended in failure. | While running, wait for it to finish. If it failed, read the run logs and any pending GitHub writes, and reconcile them. For another attempt, open a separately authorized follow-up issue and start again with `factory:plan`. Never delete the claim comment to force a retry. |
+
+None of these responses changes the guardrails: `factory:plan` stays no-model,
+`factory:run` stays writer-only, only the exact files listed in the issue may
+change, the result is published only as a draft PR after independent
+verification and Quality, and merging remains a human decision. A future paid
+build is authorized only when a human reviews the plan and deliberately applies
+`factory:run`.
+
 ## Activation order and prerequisites
 
 Merge the [Factory implementation PR](https://github.com/grove/factory/pull/14)
