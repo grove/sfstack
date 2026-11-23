@@ -6,6 +6,10 @@ workflows, operational documentation, and recovery tests have moved there.
 
 Continue with the [factory guide](https://github.com/grove/factory/blob/main/docs/how-to/run-software-factory.md).
 
+**Simpler path (after deployment):** [start with `factory:plan` and `factory:run`](issue-label-software.md)
+directly on a GitHub issue. No `gh` command or five-field Actions form is needed.
+The manual workflow below remains a supported operator fallback.
+
 sfstack supplies the portable skills, schemas, recipes, and
 [versioned contract CLI](../reference/public-cli.md). It has no GitHub credentials,
 event routing, draft publisher, or check-run owner. The host installs a pinned
@@ -18,8 +22,11 @@ The trusted Software Factory implementation now lives in
 thin [`.github/workflows/sfstack-software.yml`](../../.github/workflows/sfstack-software.yml)
 calls it at the immutable, reviewed Factory commit
 `cb4b0b07b1d273af03e9fe860b7cf9113b6064d9`. It is a **manual-only** `workflow_dispatch`
-entrypoint: opening, editing, or labeling an issue cannot autonomously
-start a build, and candidates cannot choose their own controller source.
+entrypoint and **does not** activate from issue events. A separate,
+independently reviewed and SHA-pinned `sfstack-issue-label.yml` caller offers
+a writer-authorized label trigger after an exact plan review; merely opening
+or editing an issue still does not start a build. Candidates never choose
+their controller source.
 
 The maintainer selects an **open issue**, 1–8 exact permitted files, a JSON
 array of acceptance criteria, and `change` or `defect` mode. The caller
