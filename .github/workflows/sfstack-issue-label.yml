@@ -1,0 +1,75 @@
+name: sfstack issue-label Software Factory
+
+# Issue prose is untrusted. A writer's labeled event on protected main must
+# create a reviewed, one-shot claim before the paid build can run.
+on:
+  issues:
+    types: [labeled]
+
+run-name: "sfstack issue #${{ github.event.issue.number }} / ${{ github.event.label.name }}"
+permissions: {}
+
+# One workflow-level lock serializes all plan/run label events for one issue.
+# The downstream publisher retains its own independent Quality writer lock.
+concurrency:
+  group: sfstack-issue-label-${{ github.repository }}-${{ github.event.issue.number }}
+  queue: max
+
+jobs:
+  authorize:
+    name: Validate actual human labeler and exact plan; claim before build
+    if: >-
+      github.repository == 'grove/sfstack' &&
+      (github.event.label.name == 'factory:plan' || github.event.label.name == 'factory:run') &&
+      !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    outputs:
+      authorized: ${{ steps.label.outputs.authorized }}
+      issue_number: ${{ steps.label.outputs.issue_number }}
+      allowed_paths: ${{ steps.label.outputs.allowed_paths }}
+      acceptance_criteria: ${{ steps.label.outputs.acceptance_criteria }}
+      repair_mode: ${{ steps.label.outputs.repair_mode }}
+      regression_file: ${{ steps.label.outputs.regression_file }}
+    steps:
+      - name: Load only reviewed immutable Factory coordinator source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: grove/factory
+          ref: e279c0eb3ce18a529cf7941492caa07ca0c03882
+          path: controller
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Install pinned portable contract CLI
+        run: python controller/tools/bootstrap_contracts.py
+      - name: Authenticate label, post plan or durable one-shot claim
+        id: label
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python controller/integrations/github/issue_labels.py --out authorization.json
+
+  software:
+    name: Execute pinned, already-authorized Software Factory
+    needs: authorize
+    if: needs.authorize.result == 'success' && needs.authorize.outputs.authorized == 'true'
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: write
+      actions: write
+      checks: write
+    uses: grove/factory/.github/workflows/sfstack-software.yml@e279c0eb3ce18a529cf7941492caa07ca0c03882
+    with:
+      issue-number: ${{ fromJSON(needs.authorize.outputs.issue_number) }}
+      allowed-paths: ${{ needs.authorize.outputs.allowed_paths }}
+      acceptance-criteria: ${{ needs.authorize.outputs.acceptance_criteria }}
+      repair-mode: ${{ needs.authorize.outputs.repair_mode }}
+      regression-file: ${{ needs.authorize.outputs.regression_file }}
+    secrets:
+      COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
