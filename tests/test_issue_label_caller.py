@@ -57,6 +57,21 @@ class LabelCallerTests(unittest.TestCase):
         self.assertIn("sfstack-ai-plan-proposal-", publish)
         self.assertIn("needs.authorize.outputs.plan_requested == 'true'", plan)
 
+    def test_plan_publisher_bootstraps_runtime_independently(self):
+        # Regression for live issue #54: Copilot succeeded, but this fresh
+        # publisher job imported software.py before jsonschema was installed.
+        text = WORKFLOW.read_text(encoding="utf-8")
+        auth = text.split("\n  authorize:\n", 1)[1].split("\n  plan:\n", 1)[0]
+        publish = text.split("\n  publish_plan:\n", 1)[1].split("\n  software:\n", 1)[0]
+        bootstrap = "python controller/tools/bootstrap_contracts.py"
+        self.assertIn(bootstrap, auth)
+        self.assertEqual(1, publish.count(bootstrap))
+        self.assertLess(publish.index("actions/setup-python@"), publish.index(bootstrap))
+        self.assertLess(publish.index(bootstrap), publish.index("--publish-ai"))
+        self.assertIn("issues: write", publish)
+        self.assertNotIn("COPILOT_GITHUB_TOKEN", publish)
+        self.assertNotIn("contents: write", publish)
+
     def test_publisher_rights_are_not_on_label_authorizer(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         auth = text.split("\n  authorize:\n", 1)[1].split("\n  plan:\n", 1)[0]
