@@ -4,6 +4,12 @@ Choose a section by the job you need the documentation to do. The structure
 follows [Diátaxis](https://diataxis.fr/): learning, accomplishing a task, looking up
 precise information, and understanding the design are different activities.
 
+## GitHub Factory users
+
+The GitHub host lives in [Factory](https://github.com/grove/factory). Start with [Factory documentation](https://github.com/grove/factory/blob/main/docs/README.md) for installation, supported projects, direct/planned builds, independent Quality and recovery.
+
+This index covers the portable sfstack library and its local tools, not the operational GitHub host.
+
 ## Tutorials — learn through a guided exercise
 
 - [Run your first skill](tutorials/first-skill.md): clarify an outcome and inspect an evidence-bearing result.
@@ -15,7 +21,7 @@ precise information, and understanding the design are different activities.
 
 - [Initialize and resume a local quality run](how-to/run-local.md).
 - [Assess a PR with GitHub Actions and Agentic Workflows](how-to/run-github.md).
-- [Turn a GitHub issue into a verified draft PR](how-to/run-software-factory.md).
+- [Turn a GitHub issue into a verified draft PR](how-to/run-software-factory.md) or [use issue labels in sfstack](how-to/issue-label-software.md).
 - [Select skills and workflows](how-to/select-skills.md).
 - [Connect a coding agent](how-to/connect-agent.md).
 - [Connect an issue tracker](how-to/connect-tracker.md).
